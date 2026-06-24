@@ -1,0 +1,34 @@
+# Example dataset config (gene-module targets).
+# Same dataset as example.yaml, but regresses gene-module scores instead of
+# individual genes. Point targets.modules_csv at a CSV with columns
+# `module` and `id` (gene symbol). Run with:
+#   spamil build-targets --config configs/example_modules.yaml --target modules
+#   spamil train         --config configs/example_modules.yaml --target modules --mode full
+
+dataset:
+  name: example_visium_modules
+  data_dir: /path/to/visium_data
+  layout: flat
+  he_dir: /path/to/he_images
+  he_pattern: "{library_id}.tif"
+  samples: auto
+
+paths:
+  work_dir: ./spamil_work
+  tmp_dir: $TMPDIR
+
+embed:
+  patch_size: 224
+  foundation_model: "hf-hub:paige-ai/Virchow2"
+  batch_size: 32
+  stardist_model_dir: null
+
+targets:
+  type: modules
+  # CSV with columns `module` and `id`; the bundled file is a small example.
+  modules_csv: assets/modules/example_gene_modules.csv
+
+train:
+  epochs: 5
+  batch_size: 16
+  lr: 1.0e-4

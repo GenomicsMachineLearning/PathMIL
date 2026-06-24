@@ -1,0 +1,83 @@
+# SpaMIL base configuration.
+# A dataset config (e.g. example.yaml) is deep-merged on top of this,
+# then any CLI `--override key=value` is applied last.
+
+dataset:
+  name: default
+  # Root directory holding one sub-directory per Visium sample.
+  data_dir: null
+  # On-disk layout of each sample directory:
+  #   outs  -> <data_dir>/<library_id>/outs/filtered_feature_bc_matrix.h5 (+ spatial/)
+  #   flat  -> <data_dir>/<library_id>/filtered_feature_bc_matrix.h5      (+ spatial/)
+  layout: flat
+  # Directory holding the full-resolution H&E images (one per sample).
+  he_dir: null
+  # How to build the H&E filename from a library_id (str.format with {library_id}).
+  # When he_dir is null the H&E is looked up *inside* each sample dir (<lib>/<fname>).
+  he_pattern: "{library_id}.tif"
+  # Optional tidy CSV (one row per sample) supplying the sample list when
+  # samples=="auto"; sheet_lib_col names its library-id column.
+  sample_sheet: null
+  sheet_lib_col: library_id
+  # "auto" to discover every sample dir under data_dir, or an explicit list of ids.
+  samples: auto
+
+paths:
+  # Persistent outputs live under work_dir; tmp_dir is fast scratch (per-job).
+  work_dir: null
+  tmp_dir: $SLURM_TMPDIR
+  # Sub-directories created under work_dir (relative names).
+  embeddings_subdir: embeddings          # <lib>_patch_embeddings.h5 + <lib>.zarr.zip
+  processed_subdir: mil_processed_samples # combined embeddings+target H5 used for training
+  models_subdir: models                   # checkpoints
+  predictions_subdir: predictions         # prediction .npy outputs
+  plots_subdir: plots                     # figures
+
+embed:
+  patch_size: 224
+  # No-gap sliding-window grid (visualization track). Defaults tile the tissue with
+  # non-overlapping `patch_size` patches so the superpixel map covers the whole slide.
+  image_patch_width: 224
+  image_patch_overlap: 0
+  # Cell segmentation (StarDist) tiling, independent of the embedding grid above. StarDist
+  # H&E works best on large tiles; 2000px with a small overlap avoids excessive border
+  # artifacts and cells split at tile edges.
+  cell_seg_patch_width: 2000
+  cell_seg_patch_overlap: 50
+  save_debug_plots: true     # save QC overlays (tissue mask, tiles on H&E) to plots/<lib>/
+  foundation_model: "hf-hub:paige-ai/Virchow2"
+  batch_size: 32
+  n_workers: 6
+  memory_limit: "40GB"
+  stardist_model_dir: null   # local path to StarDist2D/2D_versatile_he, or null to use default
+  stardist_min_area: 30
+  hf_login: true             # call huggingface_hub.login(new_session=False) before loading model
+
+targets:
+  type: genes                # genes | modules
+  top_n: 1000                # number of highly-variable genes when type=genes
+  modules_csv: null          # CSV with columns `module` and `id` when type=modules
+  gene_list: null            # path to an existing gene_list.pkl (skip HVG selection)
+  modules_info: null         # path to an existing modules_info.pkl
+
+model:
+  input_dim: 1280
+  hidden_dim: 512
+  attention_dim: 256
+  dropout: 0.3
+
+train:
+  mode: full                 # full | loo
+  epochs: 5
+  batch_size: 16
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 4
+  grad_clip: 1.0
+  seed: 0
+
+plot:
+  # Default number of top targets (by variance) to render when none are named.
+  n_top: 6
+  point_size: 8
+  cmap: viridis

@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spamil"
+version = "0.1.0"
+description = "SpaMIL: attention-based Multiple Instance Learning for predicting gene/module expression from Visium H&E histology"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Xiao Tan" }]
+keywords = ["spatial-transcriptomics", "visium", "histology", "multiple-instance-learning", "deep-learning"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "h5py",
+    "pyyaml",
+    "tqdm",
+    "matplotlib",
+    "scikit-learn",
+    "torch",
+    "anndata",
+    "scanpy",
+]
+
+# Heavy extras for the `preprocess` (embedding) step. Install with
+# `pip install -e .[embed]` only if you need to generate patch embeddings;
+# train/predict/plot need just the core dependencies above.
+[project.optional-dependencies]
+embed = [
+    "sopa[stardist,wsi]",
+    "spatialdata",
+    "spatialdata-io",
+    "spatialdata-plot",
+    "timm",
+    "geopandas",
+    "shapely",
+    "dask",
+    "huggingface_hub",
+    "Pillow",
+]
+
+[project.urls]
+Homepage = "https://github.com/GenomicsMachineLearning/SpaMIL"
+Repository = "https://github.com/GenomicsMachineLearning/SpaMIL"
+
+[project.scripts]
+spamil = "spamil.cli:main"
+
+[tool.setuptools]
+packages = ["spamil"]
+
+[tool.setuptools.package-data]
+spamil = ["../configs/*.yaml"]

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# SpaMIL outputs / working dirs
+spamil_work/
+work/
+logs/
+*.jobid*
+
+# Large artifacts (never commit)
+*.sif
+*.h5
+*.zarr
+*.zarr.zip
+*.npy
+*.pth
+
+# OS / editor
+.DS_Store
+*.swp

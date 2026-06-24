@@ -1,0 +1,41 @@
+# Example dataset config (gene targets).
+# Copy this file, point the paths at your own Visium data, and run:
+#   spamil <step> --config configs/example.yaml
+# Only the keys you want to change need to be present; everything else falls
+# back to configs/default.yaml.
+
+dataset:
+  name: example_visium
+  # Root directory holding one sub-directory per Visium sample.
+  data_dir: /path/to/visium_data
+  # On-disk layout of each sample dir: "flat" or "outs" (see README).
+  layout: flat
+  # Directory with the full-resolution H&E images. Set to null to look the
+  # H&E up *inside* each sample directory (<lib>/<he_pattern>).
+  he_dir: /path/to/he_images
+  # Build the H&E filename from a library_id, e.g. VLP97_A -> VLP97_A.tif
+  he_pattern: "{library_id}.tif"
+  # "auto" discovers every sample dir under data_dir; or give an explicit list.
+  samples: auto
+
+paths:
+  # Persistent outputs (embeddings, models, predictions, plots) live here.
+  work_dir: ./spamil_work
+  # Fast per-job scratch; falls back to <work_dir>/tmp if unset.
+  tmp_dir: $TMPDIR
+
+embed:
+  patch_size: 224
+  foundation_model: "hf-hub:paige-ai/Virchow2"
+  batch_size: 32
+  # null -> StarDist downloads the 2D_versatile_he H&E model on first use.
+  stardist_model_dir: null
+
+targets:
+  type: genes
+  top_n: 1000
+
+train:
+  epochs: 5
+  batch_size: 16
+  lr: 1.0e-4
