@@ -59,6 +59,13 @@ he = [
     "Pillow",
     "openslide-python",
     "tifffile",
+    # --sc_pred only: StarDist nucleus segmentation + per-cell geometry output.
+    "stardist",
+    "csbdeep",
+    "tensorflow",
+    "shapely",
+    "geopandas",
+    "pyarrow",
 ]
 
 [project.urls]

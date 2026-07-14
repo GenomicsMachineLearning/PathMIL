@@ -75,6 +75,52 @@ Embeddings are streamed straight into the regressor and never written to disk, s
 whole-slide image needs only a batch's worth of memory rather than the tens of GB its raw
 Virchow2 tokens would occupy. Pass `--save-embeddings` if you want them anyway.
 
+### Single-cell prediction (`--sc_pred`)
+
+The MIL head is **additive** — a tile's score is the attention-weighted sum of its 256
+per-instance scores — so those 256 Virchow2 tokens are a genuine **16×16 prediction map
+inside each tile**, not a by-product. `--sc_pred` exposes that, and pushes it down to
+individual nuclei:
+
+```
+tile (bag)  →  instance (16×16 tokens)  →  single cell (StarDist nuclei)
+```
+
+```bash
+python scripts/predict_he.py \
+    --slide tumour.svs --checkpoint model_checkpoint.pth --out results/ \
+    --target-mpp 0.2535 --sc_pred
+```
+
+```
+results/tumour/
+  cells.csv                     cell_id, x, y, area, attention, <one column per target>
+  cells.parquet                 the same + the StarDist nucleus polygon (GeoParquet)
+  instance_predictions.npy      (n_tiles, 256, n_targets)
+  instance_attention.npy        (n_tiles, 256)
+  tumour_<target>_4panel.png    H&E+nuclei | tile | instance | single-cell
+  tumour_segmentation.png       full-resolution crop with nucleus outlines (QC)
+```
+
+Nuclei are segmented per tile with StarDist `2D_versatile_he`, on a slightly padded crop
+so cells near a tile edge are seen whole. A nucleus is then kept by **the tile whose core
+contains its centroid** — tile ownership is a partition, so a cell straddling a seam is
+detected twice but counted once. Each cell's score is the mean of the instance tokens its
+outline overlaps.
+
+Two things to know:
+
+- **Segmentation runs on CPU** and is the slow part (the GPU stays reserved for Virchow2 —
+  TensorFlow would otherwise claim the whole device). Expect it to dominate the runtime on
+  a whole slide.
+- **The instance array is held in memory** as `(n_tiles, 256, n_targets)` so the most
+  variable targets can be picked after the pass. That is fine for a module model (tens of
+  targets) but not for a 1000-gene one; the script estimates the size up front and tells
+  you to pass `--targets` rather than dying halfway. `--max-instance-gb` raises the limit.
+
+StarDist weights are not shipped with this repo: they are downloaded on first use, or
+point `--stardist-model-dir` at a local `2D_versatile_he` folder for offline runs.
+
 `openslide-python` needs the OpenSlide **C library** installed
 (`conda install -c conda-forge openslide-python`, or `apt install libopenslide0`);
 without it the script falls back to PIL/tifffile, which cannot read pyramidal WSI formats
