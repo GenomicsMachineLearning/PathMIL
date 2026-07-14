@@ -1,6 +1,15 @@
-"""Attention-MIL regressor (ported verbatim from train_mil_loo.py) plus
-checkpoint helpers. The same architecture serves both the gene and module
-targets; only the output dimension (`num_outputs`) changes."""
+"""Attention-based **additive** MIL regressor plus checkpoint helpers.
+
+Each spot is a bag of `n_instances` patch-token embeddings. A single regressor
+head scores every instance, and the bag prediction is the attention-weighted sum
+of those per-instance predictions (additive MIL, Javed et al. 2022). This ties the
+bag and instance heads to the *same* supervised weights, so the per-instance
+predictions are a genuine, interpretable decomposition of the bag prediction --
+unlike the earlier design, which had a separate bag head and left the instance
+head untrained (it never entered the loss graph, so it stayed at random init).
+
+The same architecture serves both the gene and module targets; only the output
+dimension (`num_outputs`) changes."""
 
 from __future__ import annotations
 
@@ -13,9 +22,10 @@ import torch.nn as nn
 class MILAttentionRegressor(nn.Module):
     """Multi-Instance Learning model for per-spot expression regression.
 
-    A spot is a "bag" of `n_instances` patch-token embeddings; an attention
-    pooling aggregates them into a bag representation that is regressed to the
-    target vector (genes or module scores).
+    A spot is a "bag" of `n_instances` patch-token embeddings. Every instance is
+    scored by `instance_regressor`; the bag prediction is the attention-weighted
+    sum of those instance predictions (additive MIL). Both the bag- and
+    instance-level outputs therefore flow through the same supervised head.
     """
 
     def __init__(self,
@@ -43,14 +53,9 @@ class MILAttentionRegressor(nn.Module):
             nn.Linear(attention_dim, 1),
         )
 
+        # Single shared head: scores each instance; the bag prediction is the
+        # attention-weighted sum of these per-instance predictions (additive MIL).
         self.instance_regressor = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dim // 2, num_outputs),
-        )
-
-        self.bag_regressor = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
@@ -62,18 +67,19 @@ class MILAttentionRegressor(nn.Module):
         x_flat = x.view(-1, feature_dim)
 
         H_flat = self.instance_encoder(x_flat)
-        H = H_flat.view(batch_size, n_instances, -1)
 
         A_flat = self.attention(H_flat)
         A = A_flat.view(batch_size, n_instances, 1)
-        A = torch.softmax(A, dim=1)
+        A = torch.softmax(A, dim=1)                       # (B, N, 1); sums to 1 over N
 
-        M = torch.sum(A * H, dim=1)
-        bag_out = self.bag_regressor(M)
+        inst_out_flat = self.instance_regressor(H_flat)
+        inst_out = inst_out_flat.view(batch_size, n_instances, -1)   # (B, N, num_out)
+
+        # Additive MIL: bag prediction = attention-weighted sum of instance
+        # predictions. The bag-level MSE loss thus supervises the instance head.
+        bag_out = torch.sum(A * inst_out, dim=1)          # (B, num_out)
 
         if return_instance_predictions:
-            inst_out_flat = self.instance_regressor(H_flat)
-            inst_out = inst_out_flat.view(batch_size, n_instances, -1)
             return bag_out, inst_out, A.squeeze(-1)
 
         return bag_out

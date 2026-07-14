@@ -26,6 +26,9 @@ logs/
 *.npy
 *.pth
 
+# Internal working notes — never ship
+PROJECT_CONTEXT.md
+
 # OS / editor
 .DS_Store
 *.swp

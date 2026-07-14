@@ -4,11 +4,13 @@ Attention-based **Multiple Instance Learning** for predicting per-spot **gene
 expression** and **gene-module scores** from Visium **H&E histology**.
 
 Each Visium spot is a *bag*; the 256 Virchow2 patch-token embeddings around the
-spot are the *instances*. An attention-MIL regressor pools the instances and
-regresses the spot's expression. The target (gene expression / module score) is
-read directly from each sample's `filtered_feature_bc_matrix.h5` — **no
-sample-level clinical metadata is required**, so the pipeline runs on any new
-Visium dataset out of the box.
+spot are the *instances*. An **additive** attention-MIL regressor scores every
+instance, and the spot prediction is the attention-weighted sum of those
+per-instance predictions — so the instance-level outputs are a genuine
+decomposition of the spot prediction, not a separate untied head. The target
+(gene expression / module score) is read directly from each sample's
+`filtered_feature_bc_matrix.h5` — **no sample-level clinical metadata is
+required**, so the pipeline runs on any new Visium dataset out of the box.
 
 ## Pipeline
 
