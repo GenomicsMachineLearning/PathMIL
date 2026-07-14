@@ -33,6 +33,53 @@ against the build-targets ground truth when present → `target_level_pcc.csv` /
 (`image_bag_predictions.npy` + `image_instance_predictions.npy`) that `plot` uses to
 render the fine superpixel / single-cell maps over the whole tissue.
 
+## Predict from an H&E slide
+
+Once a model is trained, `scripts/predict_he.py` applies it to a plain H&E image — no
+Visium spots, no expression matrix, no config file. It reads the slide, embeds each
+tissue tile with Virchow2, runs the MIL regressor, and writes per-tile scores plus
+spatial heatmaps:
+
+```bash
+uv pip install -e .[he]
+
+python scripts/predict_he.py \
+    --slide tumour.svs \
+    --checkpoint model_checkpoint.pth \
+    --out results/ \
+    --target-mpp 0.2535
+```
+
+```
+results/tumour/
+  predictions.csv          tile_x, tile_y, <one column per target>
+  bag_predictions.npy      (n_tiles, n_outputs)
+  tile_xy.npy              (n_tiles, 2) — top-left pixel of each tile
+  tumour_overview.png      every target, small multiples over the H&E
+  tumour_<target>.png      the 6 most spatially-variable targets
+```
+
+`--slide` accepts a file or a directory (and is repeatable). Output columns are named
+automatically: the checkpoint carries its own target list, so you never have to tell the
+script whether it predicts genes or module scores.
+
+**Match the field of view.** The model always sees a 224px tile, so a slide scanned at a
+different magnification than the training data shows it the wrong *physical* area.
+`--target-mpp` is the microns-per-pixel the model was **trained** at (e.g. `0.2535` for
+40x): each tile is read at the size covering that same physical area and resampled to
+224px. Omit it only if your slide is already at the training resolution. If the model was
+trained at 40x and you run a 20x slide without `--target-mpp`, the predictions will be
+against a field of view twice the intended size.
+
+Embeddings are streamed straight into the regressor and never written to disk, so a
+whole-slide image needs only a batch's worth of memory rather than the tens of GB its raw
+Virchow2 tokens would occupy. Pass `--save-embeddings` if you want them anyway.
+
+`openslide-python` needs the OpenSlide **C library** installed
+(`conda install -c conda-forge openslide-python`, or `apt install libopenslide0`);
+without it the script falls back to PIL/tifffile, which cannot read pyramidal WSI formats
+such as `.svs`.
+
 ## Install
 
 ```bash

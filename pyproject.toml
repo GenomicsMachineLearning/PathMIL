@@ -49,6 +49,18 @@ embed = [
     "Pillow",
 ]
 
+# H&E-only inference (`scripts/predict_he.py`): apply a trained checkpoint to a slide.
+# Much lighter than [embed] — no sopa/spatialdata, since there are no Visium spots to
+# read. Note that `openslide-python` also needs the OpenSlide C library present:
+#   conda install -c conda-forge openslide-python   # or: apt install libopenslide0
+he = [
+    "timm",
+    "huggingface_hub",
+    "Pillow",
+    "openslide-python",
+    "tifffile",
+]
+
 [project.urls]
 Homepage = "https://github.com/GenomicsMachineLearning/SpaMIL"
 Repository = "https://github.com/GenomicsMachineLearning/SpaMIL"
