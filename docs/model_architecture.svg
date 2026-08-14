@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="900" viewBox="0 0 1060 900" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#546e7a"/>
+    </marker>
+    <marker id="arwd" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#90a4ae"/>
+    </marker>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#263238" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <style>
+    .edge   { stroke:#546e7a; stroke-width:2; fill:none; }
+    .edged  { stroke:#90a4ae; stroke-width:2; fill:none; stroke-dasharray:6 5; }
+    .htitle { font-size:26px; font-weight:700; fill:#1f2933; }
+    .hsub   { font-size:14px; fill:#52606d; }
+    .btitle { font-size:15px; font-weight:700; }
+    .row    { font-size:13px; fill:#37474f; }
+    .rowm   { font-size:12.5px; fill:#37474f; font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace; }
+    .lbl    { font-size:12px; fill:#607d8b; font-style:italic; }
+    .pill   { font-size:12px; font-weight:600; }
+  </style>
+
+  <rect x="0" y="0" width="1060" height="900" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="530" y="40" text-anchor="middle" class="htitle">SpaMIL — Attention-MIL Regressor</text>
+  <text x="530" y="63" text-anchor="middle" class="hsub">MILAttentionRegressor · one Visium spot = a bag of patch-token instances</text>
+
+  <!-- INPUT -->
+  <rect x="290" y="84" width="480" height="64" rx="10" fill="#e3f2fd" stroke="#1e88e5" stroke-width="1.6" filter="url(#sh)"/>
+  <text x="530" y="110" text-anchor="middle" class="btitle" fill="#0d47a1">Input bag — patch-token embeddings</text>
+  <text x="530" y="132" text-anchor="middle" class="rowm" fill="#1565c0">256 Virchow2 tokens × 1280   ·   (B, 256, 1280)</text>
+
+  <path class="edge" d="M530,148 L530,178" marker-end="url(#arw)"/>
+
+  <!-- FLATTEN -->
+  <rect x="395" y="180" width="270" height="32" rx="16" fill="#eceff1" stroke="#b0bec5" stroke-width="1.2"/>
+  <text x="530" y="201" text-anchor="middle" class="rowm" fill="#455a64">flatten instances → (B·256, 1280)</text>
+
+  <path class="edge" d="M530,212 L530,236" marker-end="url(#arw)"/>
+
+  <!-- INSTANCE ENCODER -->
+  <rect x="255" y="238" width="550" height="176" rx="12" fill="#e0f2f1" stroke="#00897b" stroke-width="1.6" filter="url(#sh)"/>
+  <text x="530" y="264" text-anchor="middle" class="btitle" fill="#00695c">Instance encoder — shared MLP (applied per instance)</text>
+  <rect x="285" y="276" width="490" height="40" rx="8" fill="#ffffff" stroke="#4db6ac" stroke-width="1.2"/>
+  <text x="530" y="301" text-anchor="middle" class="row">Linear 1280 → 512   ·   BatchNorm1d   ·   ReLU   ·   Dropout 0.3</text>
+  <rect x="285" y="322" width="490" height="40" rx="8" fill="#ffffff" stroke="#4db6ac" stroke-width="1.2"/>
+  <text x="530" y="347" text-anchor="middle" class="row">Linear 512 → 512    ·   BatchNorm1d   ·   ReLU   ·   Dropout 0.3</text>
+  <text x="530" y="392" text-anchor="middle" class="lbl">reshape → per-instance embeddings</text>
+
+  <!-- H node -->
+  <rect x="435" y="424" width="190" height="30" rx="15" fill="#b2dfdb" stroke="#00897b" stroke-width="1.4"/>
+  <text x="530" y="444" text-anchor="middle" class="rowm" fill="#00695c">H : (B, 256, 512)</text>
+  <path class="edge" d="M530,414 L530,424"/>
+
+  <!-- branches from H -->
+  <!-- to attention (right) -->
+  <path class="edge" d="M625,439 L870,439 L870,476" marker-end="url(#arw)"/>
+  <!-- to pooling (down) -->
+  <path class="edge" d="M530,454 L530,502" marker-end="url(#arw)"/>
+  <!-- to instance regressor (left, dashed) -->
+  <path class="edged" d="M435,439 L190,439 L190,476" marker-end="url(#arwd)"/>
+
+  <!-- ATTENTION NETWORK (right) -->
+  <rect x="720" y="478" width="300" height="176" rx="12" fill="#fff3e0" stroke="#fb8c00" stroke-width="1.6" filter="url(#sh)"/>
+  <text x="870" y="503" text-anchor="middle" class="btitle" fill="#e65100">Attention network</text>
+  <rect x="745" y="513" width="250" height="30" rx="7" fill="#ffffff" stroke="#ffb74d" stroke-width="1.2"/>
+  <text x="870" y="533" text-anchor="middle" class="row">Linear 512 → 256</text>
+  <rect x="745" y="547" width="250" height="30" rx="7" fill="#ffffff" stroke="#ffb74d" stroke-width="1.2"/>
+  <text x="870" y="567" text-anchor="middle" class="row">Tanh</text>
+  <rect x="745" y="581" width="250" height="30" rx="7" fill="#ffffff" stroke="#ffb74d" stroke-width="1.2"/>
+  <text x="870" y="601" text-anchor="middle" class="row">Linear 256 → 1</text>
+  <text x="870" y="638" text-anchor="middle" class="lbl">softmax over 256 instances → A</text>
+
+  <!-- INSTANCE REGRESSOR (left, optional) -->
+  <rect x="40" y="478" width="300" height="176" rx="12" fill="#f3f4f6" stroke="#90a4ae" stroke-width="1.6" stroke-dasharray="7 5" filter="url(#sh)"/>
+  <text x="190" y="503" text-anchor="middle" class="btitle" fill="#546e7a">Instance regressor  (optional)</text>
+  <rect x="65" y="513" width="250" height="30" rx="7" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+  <text x="190" y="533" text-anchor="middle" class="row">Linear 512 → 256</text>
+  <rect x="65" y="547" width="250" height="30" rx="7" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+  <text x="190" y="567" text-anchor="middle" class="row">ReLU · Dropout 0.3</text>
+  <rect x="65" y="581" width="250" height="30" rx="7" fill="#ffffff" stroke="#b0bec5" stroke-width="1.2"/>
+  <text x="190" y="601" text-anchor="middle" class="row">Linear 256 → num_outputs</text>
+  <text x="190" y="638" text-anchor="middle" class="lbl">per-instance predictions</text>
+
+  <!-- ATTENTION POOLING (center) -->
+  <rect x="380" y="504" width="300" height="72" rx="12" fill="#f3e5f5" stroke="#8e24aa" stroke-width="1.6" filter="url(#sh)"/>
+  <text x="530" y="530" text-anchor="middle" class="btitle" fill="#6a1b9a">Attention pooling</text>
+  <text x="530" y="556" text-anchor="middle" class="rowm" fill="#6a1b9a">M = Σᵢ Aᵢ · Hᵢ  →  (B, 512)</text>
+
+  <!-- A into pooling -->
+  <path class="edge" d="M720,540 L684,540" marker-end="url(#arw)"/>
+  <text x="702" y="530" text-anchor="middle" class="lbl">A</text>
+
+  <path class="edge" d="M530,576 L530,622" marker-end="url(#arw)"/>
+
+  <!-- BAG REGRESSOR (center) -->
+  <rect x="360" y="624" width="340" height="150" rx="12" fill="#fce4ec" stroke="#e91e63" stroke-width="1.6" filter="url(#sh)"/>
+  <text x="530" y="649" text-anchor="middle" class="btitle" fill="#ad1457">Bag regressor</text>
+  <rect x="385" y="659" width="290" height="30" rx="7" fill="#ffffff" stroke="#f06292" stroke-width="1.2"/>
+  <text x="530" y="679" text-anchor="middle" class="row">Linear 512 → 256</text>
+  <rect x="385" y="693" width="290" height="30" rx="7" fill="#ffffff" stroke="#f06292" stroke-width="1.2"/>
+  <text x="530" y="713" text-anchor="middle" class="row">ReLU · Dropout 0.3</text>
+  <rect x="385" y="727" width="290" height="30" rx="7" fill="#ffffff" stroke="#f06292" stroke-width="1.2"/>
+  <text x="530" y="747" text-anchor="middle" class="row">Linear 256 → num_outputs</text>
+
+  <!-- edges to outputs -->
+  <path class="edge"  d="M530,774 L530,806" marker-end="url(#arw)"/>
+  <path class="edge"  d="M870,654 L870,806" marker-end="url(#arw)"/>
+  <path class="edged" d="M190,654 L190,806" marker-end="url(#arwd)"/>
+
+  <!-- OUTPUT CHIPS -->
+  <rect x="40" y="808" width="300" height="58" rx="10" fill="#ffffff" stroke="#90a4ae" stroke-width="1.4" stroke-dasharray="7 5"/>
+  <text x="190" y="832" text-anchor="middle" class="btitle" fill="#546e7a">Instance predictions</text>
+  <text x="190" y="852" text-anchor="middle" class="rowm" fill="#546e7a">(B, 256, num_outputs) → tissue maps</text>
+
+  <rect x="380" y="808" width="300" height="58" rx="10" fill="#fce4ec" stroke="#e91e63" stroke-width="1.6"/>
+  <text x="530" y="832" text-anchor="middle" class="btitle" fill="#ad1457">Bag prediction  (primary)</text>
+  <text x="530" y="852" text-anchor="middle" class="rowm" fill="#ad1457">genes: 1000 HVG · modules: 15 scores</text>
+
+  <rect x="720" y="808" width="300" height="58" rx="10" fill="#fff3e0" stroke="#fb8c00" stroke-width="1.6"/>
+  <text x="870" y="832" text-anchor="middle" class="btitle" fill="#e65100">Attention weights A</text>
+  <text x="870" y="852" text-anchor="middle" class="rowm" fill="#e65100">(B, 256) — spatial saliency</text>
+
+  <!-- note -->
+  <text x="530" y="888" text-anchor="middle" class="lbl">num_outputs = target dimension · forward(return_instance_predictions=True) also emits A and per-instance predictions</text>
+</svg>

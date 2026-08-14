@@ -35,6 +35,16 @@ paths:
 
 embed:
   patch_size: 224
+  # Physical scale of a patch. With `target_mpp` set, each sample reads
+  # round(patch_size * target_mpp / slide_mpp) NATIVE pixels around every spot and
+  # the model transform resizes that to patch_size -- so every slide contributes
+  # the same micrometres of tissue per instance (224 * 0.2535 = 56.8 um, about one
+  # Visium spot) whatever the scanner did. Without it a fixed 224 px patch is 56.7
+  # um on a 0.25 um/px slide and 298.6 um on a 1.33 um/px one.
+  # slide_mpp is MEASURED from the 100 um spot pitch (spamil/scale.py); do NOT
+  # substitute 55/spot_diameter_fullres, which is wrong by 9-29%.
+  # Set to null for the historical behaviour: read patch_size native px, no rescale.
+  target_mpp: 0.2535
   # No-gap sliding-window grid (visualization track). Defaults tile the tissue with
   # non-overlapping `patch_size` patches so the superpixel map covers the whole slide.
   image_patch_width: 224
@@ -59,12 +69,36 @@ targets:
   modules_csv: null          # CSV with columns `module` and `id` when type=modules
   gene_list: null            # path to an existing gene_list.pkl (skip HVG selection)
   modules_info: null         # path to an existing modules_info.pkl
+  # `target_sum` is the T in log1p(c / L * T). `build-targets` bakes it into
+  # `gene_expression` in the H5, so changing it means rebuilding the targets
+  # (`build-targets --force`). With no value, scanpy falls back to each sample's
+  # own median library size, which puts every sample on a different target scale.
+  # NOTE the explicit `+` in the exponent: YAML 1.1 parses `1.0e4` as a STRING,
+  # so every reader would have to remember float(). Keep it as `1.0e+4`.
+  target_sum: 1.0e+4
 
 model:
   input_dim: 1280
   hidden_dim: 512
   attention_dim: 256
   dropout: 0.3
+  # Instance-head output activation. softplus/relu/exp constrain the head to be
+  # non-negative; because attention is a softmax the bag inherits that for free
+  # while `bag == sum(A*inst)` keeps holding. Recorded in the checkpoint, since
+  # these activations are parameterless and would otherwise load silently.
+  # `linear` is the historical behaviour and is what checkpoints written before
+  # this key existed resolve to. Module targets are z-scored across spots and
+  # are legitimately signed, so they REQUIRE `linear` (configs/example_modules.yaml).
+  output_activation: softplus   # linear | softplus | relu | exp
+  # Attention shape. `shared` gives A: (B, N, 1), one weight per instance for all
+  # targets; `per_gene` gives A: (B, N, G), an independent softmax over instances
+  # for every target. Recorded in the checkpoint. See the README for `per_gene`'s
+  # memory cost -- the attention arrays grow to the size of the instance arrays.
+  attention_mode: per_gene      # shared | per_gene
+  output_bias_init: null        # start the head at this output value (null = torch default)
+  # softplus(0)=0.693 against a target mean of ~0.016 is a ~43x overshoot on
+  # every output column, so derive the start point from the TRAINING target mean.
+  bias_init_from_data: true
 
 train:
   mode: full                 # full | loo

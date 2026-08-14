@@ -28,6 +28,7 @@ import numpy as np
 
 from spamil.config import cget
 from spamil import io as sio
+from spamil.scale import resolve_patch_geometry
 from spamil.utils import get_logger, hf_login_if_enabled
 
 log = get_logger()
@@ -181,7 +182,6 @@ def process_sample(library_id: str, cfg: dict, paths: dict, force: bool = False)
 
     tmp_path = Path(paths["tmp_dir"])
     tmp_path.mkdir(parents=True, exist_ok=True)
-    patch_size = int(cget(cfg, "embed.patch_size", 224))
     emb_batch = int(cget(cfg, "embed.batch_size", 32))
     stardist_dir = cget(cfg, "embed.stardist_model_dir")
     min_area = int(cget(cfg, "embed.stardist_min_area", 30))
@@ -189,6 +189,21 @@ def process_sample(library_id: str, cfg: dict, paths: dict, force: bool = False)
     cell_seg_overlap = int(cget(cfg, "embed.cell_seg_patch_overlap", 50))
     save_debug_plots = bool(cget(cfg, "embed.save_debug_plots", True))
     plots_dir = Path(paths["plots"]) / library_id if save_debug_plots else None
+
+    # Physical patch scale. With `embed.target_mpp` set, patches are read at
+    # whatever native size covers `patch_size * target_mpp` micrometres and are
+    # resized to patch_size by the model transform, so every slide hands the
+    # foundation model the same quantity of tissue regardless of the scanner.
+    # Unset, this is exactly the historical native-pixel path.
+    geom = resolve_patch_geometry(library_id, cfg)
+    if geom["target_mpp"] is None:
+        log.info("[%s] patch scale: native pixels (embed.target_mpp unset), spot %d px, "
+                 "image grid %d px", library_id, geom["spot_read_px"], geom["image_read_px"])
+    else:
+        log.info("[%s] patch scale: slide %.4f um/px -> target %.4f um/px "
+                 "(%.1f um FOV); spot read %d px, image grid %d px",
+                 library_id, geom["slide_mpp"], geom["target_mpp"], geom["fov_um"],
+                 geom["spot_read_px"], geom["image_read_px"])
 
     sopa.settings.parallelization_backend = "dask"
     sopa.settings.dask_client_kwargs = {
@@ -201,7 +216,7 @@ def process_sample(library_id: str, cfg: dict, paths: dict, force: bool = False)
     sdata = sio.load_spatialdata(library_id, cfg)
     image_key = f"{library_id}_full_image"
 
-    img_patch_width = int(cget(cfg, "embed.image_patch_width", patch_size))
+    # Grid width comes from `geom` (target_mpp-aware); only the overlap is read here.
     img_patch_overlap = int(cget(cfg, "embed.image_patch_overlap", 0))
 
     log.info("[%s] tissue segmentation", library_id)
@@ -230,16 +245,16 @@ def process_sample(library_id: str, cfg: dict, paths: dict, force: bool = False)
     # cell-seg grid in sdata.shapes["image_patches"] (delete_cache above clears only the
     # on-disk segmentation cache, not these shapes).
     log.info("[%s] image patches (no-gap grid: width=%d, overlap=%d)",
-             library_id, img_patch_width, img_patch_overlap)
-    sopa.make_image_patches(sdata, patch_width=img_patch_width,
+             library_id, geom["image_read_px"], img_patch_overlap)
+    sopa.make_image_patches(sdata, patch_width=geom["image_read_px"],
                             patch_overlap=img_patch_overlap, image_key=image_key)
     if plots_dir is not None:
         _save_qc_overlay(sdata, image_key, "image_patches",
-                         f"{library_id} - tiles (width={img_patch_width})",
+                         f"{library_id} - tiles (width={geom['image_read_px']})",
                          plots_dir / f"{library_id}_qc_tiles.png")
 
-    log.info("[%s] spot patches (size=%d)", library_id, patch_size)
-    _add_spot_patches(sdata, library_id, size=patch_size)
+    log.info("[%s] spot patches (read size=%d px)", library_id, geom["spot_read_px"])
+    _add_spot_patches(sdata, library_id, size=geom["spot_read_px"])
 
     log.info("[%s] loading foundation model %s", library_id, cget(cfg, "embed.foundation_model"))
     model = timm.create_model(
@@ -249,19 +264,27 @@ def process_sample(library_id: str, cfg: dict, paths: dict, force: bool = False)
 
     image = next(iter(sdata[image_key]["scale0"].values()))
 
-    def extract_and_transform(row, patch_width=patch_size):
+    def extract_and_transform(row, read_px):
+        """Crop `read_px` native pixels around a shape and resize to the model input.
+
+        Under `embed.target_mpp` the crop is larger or smaller than the model's
+        patch size; `transforms` resizes it, which is what puts every slide on the
+        same physical scale. Padding is measured against `read_px`, so a patch
+        clipped at the slide edge is padded rather than silently short.
+        """
         box = row["bboxes"]
         patch = image[:, slice(int(box[1]), int(box[3])), slice(int(box[0]), int(box[2]))]
-        pad_x = patch_width - patch.shape[1]
-        pad_y = patch_width - patch.shape[2]
+        pad_x = max(0, read_px - patch.shape[1])
+        pad_y = max(0, read_px - patch.shape[2])
         patch = np.pad(patch, ((0, 0), (0, pad_x), (0, pad_y)))
         patch = patch.transpose(1, 2, 0)
         return transforms(Image.fromarray(patch)).unsqueeze(0)
 
-    def embed_shapes(shapes_key, out_h5):
+    def embed_shapes(shapes_key, out_h5, read_px):
         """Extract patches for `sdata[shapes_key]`, embed them, and write `out_h5`."""
-        log.info("[%s] extracting/transforming patches for '%s'", library_id, shapes_key)
-        tasks = [delayed(extract_and_transform)(row)
+        log.info("[%s] extracting/transforming patches for '%s' (read %d px)",
+                 library_id, shapes_key, read_px)
+        tasks = [delayed(extract_and_transform)(row, read_px)
                  for _, row in sdata[shapes_key].iterrows()]
         all_tensors = dask.compute(*tasks)
         batch = torch.cat(all_tensors, dim=0)  # (N, 3, P, P)
@@ -285,12 +308,21 @@ def process_sample(library_id: str, cfg: dict, paths: dict, force: bool = False)
                           for i in range(0, n_patches, emb_batch)],
                          scheduler="threads")
             f.attrs["n_spots"] = n_patches
+            # The scale these embeddings were cut at. Without it nothing
+            # downstream can say what physical field of view the model was shown,
+            # and `scripts/predict_he.py --target-mpp` has to be remembered by hand.
+            f.attrs["patch_size"] = geom["patch_size"]
+            f.attrs["read_px"] = read_px
+            if geom["target_mpp"] is not None:
+                f.attrs["target_mpp"] = geom["target_mpp"]
+                f.attrs["slide_mpp"] = geom["slide_mpp"]
+                f.attrs["fov_um"] = geom["fov_um"]
 
     # Spot-based bags (PCC / training) and the no-gap sliding-window grid (visualization).
     tmp_h5 = tmp_path / f"{library_id}_patch_embeddings.h5"
     tmp_img_h5 = tmp_path / f"{library_id}_image_patch_embeddings.h5"
-    embed_shapes("spot_patches", tmp_h5)
-    embed_shapes("image_patches", tmp_img_h5)
+    embed_shapes("spot_patches", tmp_h5, geom["spot_read_px"])
+    embed_shapes("image_patches", tmp_img_h5, geom["image_read_px"])
 
     log.info("[%s] writing zarr archive", library_id)
     sdata.write(tmp_path / f"{library_id}.zarr", overwrite=True)

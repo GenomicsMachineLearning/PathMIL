@@ -1,0 +1,216 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="760" viewBox="0 0 1500 760" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#455a64"/>
+    </marker>
+    <marker id="arwd" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#90a4ae"/>
+    </marker>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#263238" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <style>
+    .htitle { font-size:27px; font-weight:700; fill:#1f2933; }
+    .hsub   { font-size:14px; fill:#52606d; }
+    .hsubm  { font-size:13px; fill:#52606d; font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace; }
+    .snum   { font-size:22px; font-weight:700; fill:#ffffff; }
+    .sname  { font-size:18px; font-weight:700; }
+    .op     { font-size:12.5px; fill:#37474f; }
+    .out    { font-size:11.5px; fill:#37474f; font-family:'DejaVu Sans Mono',Menlo,Consolas,monospace; }
+    .outh   { font-size:12px; font-weight:700; fill:#455a64; }
+    .pill   { font-size:11px; font-weight:700; }
+    .flow   { stroke:#455a64; stroke-width:2.4; fill:none; }
+    .flowd  { stroke:#90a4ae; stroke-width:1.8; fill:none; stroke-dasharray:6 5; }
+    .inchip { font-size:12px; font-weight:600; }
+  </style>
+
+  <rect x="0" y="0" width="1500" height="760" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="750" y="40" text-anchor="middle" class="htitle">SpaMIL Pipeline — H&amp;E histology → per-spot gene expression / module scores</text>
+  <text x="750" y="64" text-anchor="middle" class="hsubm">spamil &lt;step&gt; --config &lt;cfg&gt; --target {genes,modules}</text>
+
+  <!-- ==================== INPUT CHIPS ==================== -->
+  <rect x="40" y="92" width="260" height="40" rx="8" fill="#eceff1" stroke="#78909c" stroke-width="1.3"/>
+  <text x="170" y="117" text-anchor="middle" class="inchip" fill="#37474f">Visium full-res H&amp;E  (&lt;lib&gt;.tif)</text>
+  <rect x="330" y="92" width="260" height="40" rx="8" fill="#eceff1" stroke="#78909c" stroke-width="1.3"/>
+  <text x="460" y="117" text-anchor="middle" class="inchip" fill="#37474f">filtered_feature_bc_matrix.h5</text>
+  <path class="flowd" d="M170,132 L170,168" marker-end="url(#arwd)"/>
+  <path class="flowd" d="M460,132 L460,168" marker-end="url(#arwd)"/>
+
+  <!-- ==================== STAGE HEADERS ==================== -->
+  <!-- helper geometry: columns at x = 40, 330, 620, 910, 1200 ; width 260 -->
+
+  <!-- 1 preprocess (GPU) purple -->
+  <rect x="40" y="170" width="260" height="60" rx="12" fill="#ede7f6" stroke="#5e35b1" stroke-width="1.8" filter="url(#sh)"/>
+  <circle cx="74" cy="200" r="17" fill="#5e35b1"/>
+  <text x="74" y="208" text-anchor="middle" class="snum">1</text>
+  <text x="102" y="197" class="sname" fill="#4527a0">preprocess</text>
+  <rect x="102" y="205" width="46" height="18" rx="9" fill="#ffebee" stroke="#e53935" stroke-width="1"/>
+  <text x="125" y="218" text-anchor="middle" class="pill" fill="#c62828">GPU</text>
+
+  <!-- 2 build-targets (CPU) teal -->
+  <rect x="330" y="170" width="260" height="60" rx="12" fill="#e0f2f1" stroke="#00897b" stroke-width="1.8" filter="url(#sh)"/>
+  <circle cx="364" cy="200" r="17" fill="#00897b"/>
+  <text x="364" y="208" text-anchor="middle" class="snum">2</text>
+  <text x="392" y="197" class="sname" fill="#00695c">build-targets</text>
+  <rect x="392" y="205" width="46" height="18" rx="9" fill="#eceff1" stroke="#607d8b" stroke-width="1"/>
+  <text x="415" y="218" text-anchor="middle" class="pill" fill="#455a64">CPU</text>
+
+  <!-- 3 train (GPU) blue -->
+  <rect x="620" y="170" width="260" height="60" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="1.8" filter="url(#sh)"/>
+  <circle cx="654" cy="200" r="17" fill="#1e88e5"/>
+  <text x="654" y="208" text-anchor="middle" class="snum">3</text>
+  <text x="682" y="197" class="sname" fill="#1565c0">train</text>
+  <rect x="682" y="205" width="46" height="18" rx="9" fill="#ffebee" stroke="#e53935" stroke-width="1"/>
+  <text x="705" y="218" text-anchor="middle" class="pill" fill="#c62828">GPU</text>
+
+  <!-- 4 predict (GPU) amber -->
+  <rect x="910" y="170" width="260" height="60" rx="12" fill="#fff3e0" stroke="#fb8c00" stroke-width="1.8" filter="url(#sh)"/>
+  <circle cx="944" cy="200" r="17" fill="#fb8c00"/>
+  <text x="944" y="208" text-anchor="middle" class="snum">4</text>
+  <text x="972" y="197" class="sname" fill="#e65100">predict</text>
+  <rect x="972" y="205" width="46" height="18" rx="9" fill="#ffebee" stroke="#e53935" stroke-width="1"/>
+  <text x="995" y="218" text-anchor="middle" class="pill" fill="#c62828">GPU</text>
+
+  <!-- 5 plot (CPU) pink -->
+  <rect x="1200" y="170" width="260" height="60" rx="12" fill="#fce4ec" stroke="#d81b60" stroke-width="1.8" filter="url(#sh)"/>
+  <circle cx="1234" cy="200" r="17" fill="#d81b60"/>
+  <text x="1234" y="208" text-anchor="middle" class="snum">5</text>
+  <text x="1262" y="197" class="sname" fill="#ad1457">plot</text>
+  <rect x="1262" y="205" width="46" height="18" rx="9" fill="#eceff1" stroke="#607d8b" stroke-width="1"/>
+  <text x="1285" y="218" text-anchor="middle" class="pill" fill="#455a64">CPU</text>
+
+  <!-- header-to-header flow arrows -->
+  <path class="flow" d="M300,200 L328,200" marker-end="url(#arw)"/>
+  <path class="flow" d="M590,200 L618,200" marker-end="url(#arw)"/>
+  <path class="flow" d="M880,200 L908,200" marker-end="url(#arw)"/>
+  <path class="flow" d="M1170,200 L1198,200" marker-end="url(#arw)"/>
+
+  <!-- ==================== OPS CARDS ==================== -->
+  <!-- Stage 1 ops -->
+  <rect x="40" y="246" width="260" height="222" rx="10" fill="#ffffff" stroke="#b39ddb" stroke-width="1.4"/>
+  <text x="60" y="270" class="op">• Load SpatialData (Visium + H&amp;E)</text>
+  <text x="60" y="292" class="op">• Tissue segmentation (sopa)</text>
+  <text x="60" y="314" class="op">• StarDist nucleus seg (on CPU)</text>
+  <text x="60" y="336" class="op">• Image patches: no-gap grid</text>
+  <text x="60" y="356" class="op">   + spot patches (224 px)</text>
+  <text x="60" y="378" class="op">• Virchow2 foundation model</text>
+  <text x="60" y="398" class="op">   → 256 tokens × 1280 / patch</text>
+  <line x1="60" y1="416" x2="280" y2="416" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="60" y="438" class="op" fill="#5e35b1" font-weight="700">Each spot → bag of</text>
+  <text x="60" y="458" class="op" fill="#5e35b1" font-weight="700">256 instance embeddings</text>
+
+  <!-- Stage 2 ops -->
+  <rect x="330" y="246" width="260" height="222" rx="10" fill="#ffffff" stroke="#80cbc4" stroke-width="1.4"/>
+  <text x="350" y="270" class="op">• Read filtered matrix .h5</text>
+  <text x="350" y="292" class="op">• normalize_total + log1p</text>
+  <line x1="350" y1="306" x2="570" y2="306" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="350" y="328" class="op" font-weight="700" fill="#00695c">genes:</text>
+  <text x="350" y="348" class="op">   top-1000 highly-variable genes</text>
+  <text x="350" y="372" class="op" font-weight="700" fill="#00695c">modules:</text>
+  <text x="350" y="392" class="op">   per-module mean expr, z-scored</text>
+  <line x1="350" y1="408" x2="570" y2="408" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="350" y="430" class="op">• Align target y to spot bags</text>
+  <text x="350" y="452" class="op">• Save shared target definition</text>
+
+  <!-- Stage 3 ops -->
+  <rect x="620" y="246" width="260" height="222" rx="10" fill="#ffffff" stroke="#90caf9" stroke-width="1.4"/>
+  <text x="640" y="270" class="op" font-weight="700" fill="#1565c0">MILAttentionRegressor</text>
+  <text x="640" y="292" class="op">• Bag = 256 instances → pool</text>
+  <text x="640" y="314" class="op">• MSE loss · AdamW</text>
+  <text x="640" y="336" class="op">• ReduceLROnPlateau · grad clip</text>
+  <line x1="640" y1="352" x2="860" y2="352" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="640" y="374" class="op" font-weight="700">mode = full</text>
+  <text x="640" y="394" class="op">   train on all samples</text>
+  <text x="640" y="416" class="op" font-weight="700">mode = loo</text>
+  <text x="640" y="436" class="op">   leave-one-out CV,</text>
+  <text x="640" y="456" class="op">   report PCC / MSE / R²</text>
+
+  <!-- Stage 4 ops -->
+  <rect x="910" y="246" width="260" height="222" rx="10" fill="#ffffff" stroke="#ffcc80" stroke-width="1.4"/>
+  <text x="930" y="270" class="op" font-weight="700" fill="#e65100">Track 1 — spot bags</text>
+  <text x="930" y="292" class="op">   bag + instance + attention</text>
+  <text x="930" y="314" class="op">   PCC vs ground-truth target</text>
+  <line x1="930" y1="330" x2="1150" y2="330" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="930" y="352" class="op" font-weight="700" fill="#e65100">Track 2 — image grid</text>
+  <text x="930" y="374" class="op">   no-gap sliding window over</text>
+  <text x="930" y="394" class="op">   the whole tissue</text>
+  <line x1="930" y1="410" x2="1150" y2="410" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="930" y="432" class="op">Uses checkpoint's stored</text>
+  <text x="930" y="452" class="op">architecture + target names</text>
+
+  <!-- Stage 5 ops -->
+  <rect x="1200" y="246" width="260" height="222" rx="10" fill="#ffffff" stroke="#f48fb1" stroke-width="1.4"/>
+  <text x="1220" y="270" class="op">• Read &lt;lib&gt;.zarr.zip archive</text>
+  <text x="1220" y="292" class="op">• Build superpixel /</text>
+  <text x="1220" y="312" class="op">   single-cell target maps</text>
+  <text x="1220" y="334" class="op">• Overlay predictions on H&amp;E</text>
+  <text x="1220" y="356" class="op">• Render top-N targets</text>
+  <line x1="1220" y1="372" x2="1440" y2="372" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="1220" y="394" class="op" fill="#ad1457" font-weight="700">Whole-tissue expression /</text>
+  <text x="1220" y="414" class="op" fill="#ad1457" font-weight="700">module maps at fine scale</text>
+
+  <!-- ops → output flow arrows -->
+  <path class="flow" d="M170,468 L170,494" marker-end="url(#arw)"/>
+  <path class="flow" d="M460,468 L460,494" marker-end="url(#arw)"/>
+  <path class="flow" d="M750,468 L750,494" marker-end="url(#arw)"/>
+  <path class="flow" d="M1040,468 L1040,494" marker-end="url(#arw)"/>
+  <path class="flow" d="M1330,468 L1330,494" marker-end="url(#arw)"/>
+
+  <!-- ==================== OUTPUT CARDS ==================== -->
+  <!-- Stage 1 outputs -->
+  <rect x="40" y="496" width="260" height="150" rx="10" fill="#f7f4fb" stroke="#5e35b1" stroke-width="1.2"/>
+  <rect x="40" y="496" width="7" height="150" rx="3" fill="#5e35b1"/>
+  <text x="60" y="518" class="outh">outputs → work/&lt;name&gt;/embeddings</text>
+  <text x="60" y="542" class="out">&lt;lib&gt;_patch_embeddings.h5</text>
+  <text x="60" y="560" class="op" fill="#607d8b">   spot bags (n_spots,256,1280)</text>
+  <text x="60" y="584" class="out">&lt;lib&gt;_image_patch_embeddings.h5</text>
+  <text x="60" y="602" class="op" fill="#607d8b">   tissue grid track</text>
+  <text x="60" y="626" class="out">&lt;lib&gt;.zarr.zip</text>
+
+  <!-- Stage 2 outputs -->
+  <rect x="330" y="496" width="260" height="150" rx="10" fill="#f2faf9" stroke="#00897b" stroke-width="1.2"/>
+  <rect x="330" y="496" width="7" height="150" rx="3" fill="#00897b"/>
+  <text x="350" y="518" class="outh">outputs → mil_processed_samples</text>
+  <text x="350" y="542" class="out">&lt;lib&gt;.h5</text>
+  <text x="350" y="560" class="op" fill="#607d8b">   embeddings + target y</text>
+  <text x="350" y="586" class="out">gene_list.pkl</text>
+  <text x="350" y="606" class="out">modules_info.pkl</text>
+  <text x="350" y="626" class="op" fill="#607d8b">   shared target definition</text>
+
+  <!-- Stage 3 outputs -->
+  <rect x="620" y="496" width="260" height="150" rx="10" fill="#f3f9fe" stroke="#1e88e5" stroke-width="1.2"/>
+  <rect x="620" y="496" width="7" height="150" rx="3" fill="#1e88e5"/>
+  <text x="640" y="518" class="outh">outputs → models/&lt;mode&gt;_&lt;target&gt;</text>
+  <text x="640" y="542" class="out">model_checkpoint.pth</text>
+  <text x="640" y="560" class="op" fill="#607d8b">   self-describing: arch +</text>
+  <text x="640" y="578" class="op" fill="#607d8b">   target names</text>
+  <text x="640" y="602" class="out">training_losses.csv</text>
+  <text x="640" y="626" class="out">loo metrics (PCC/MSE/R²)</text>
+
+  <!-- Stage 4 outputs -->
+  <rect x="910" y="496" width="260" height="150" rx="10" fill="#fffaf3" stroke="#fb8c00" stroke-width="1.2"/>
+  <rect x="910" y="496" width="7" height="150" rx="3" fill="#fb8c00"/>
+  <text x="930" y="518" class="outh">outputs → predictions/&lt;lib&gt;</text>
+  <text x="930" y="542" class="out">bag_predictions.npy</text>
+  <text x="930" y="562" class="out">instance_* / *_attention.npy</text>
+  <text x="930" y="582" class="out">target_level_pcc.csv</text>
+  <text x="930" y="602" class="out">results_summary.csv</text>
+  <text x="930" y="626" class="out">image_bag_predictions.npy</text>
+
+  <!-- Stage 5 outputs -->
+  <rect x="1200" y="496" width="260" height="150" rx="10" fill="#fdf3f7" stroke="#d81b60" stroke-width="1.2"/>
+  <rect x="1200" y="496" width="7" height="150" rx="3" fill="#d81b60"/>
+  <text x="1220" y="518" class="outh">outputs → plots/&lt;lib&gt;</text>
+  <text x="1220" y="542" class="out">&lt;lib&gt;_&lt;target&gt;_4panel.png</text>
+  <text x="1220" y="562" class="op" fill="#607d8b">   H&amp;E · truth · predicted ·</text>
+  <text x="1220" y="580" class="op" fill="#607d8b">   attention overlays</text>
+  <text x="1220" y="612" class="op" fill="#ad1457" font-weight="700">Final figures</text>
+
+  <!-- footer note -->
+  <text x="750" y="690" text-anchor="middle" class="hsub">Sample-agnostic: targets are read straight from each Visium matrix — no clinical metadata required, so the pipeline runs on any new cohort.</text>
+  <text x="750" y="712" text-anchor="middle" class="hsub">genes and modules share one work_dir and reuse the same embeddings — run preprocess once, then just swap --target.</text>
+</svg>

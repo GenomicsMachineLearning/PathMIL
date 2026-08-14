@@ -124,6 +124,41 @@ def load_expression(library_id: str, cfg: dict):
     return adata
 
 
+POSITION_COLUMNS = ["barcode", "in_tissue", "array_row", "array_col",
+                    "pxl_row_in_fullres", "pxl_col_in_fullres"]
+
+
+def load_tissue_positions(visium_dir_path):
+    """Read `spatial/tissue_positions*.csv` into a frame with canonical columns.
+
+    Datasets disagree about this file: some ship both the modern
+    `tissue_positions.csv` (with a header) and the legacy
+    `tissue_positions_list.csv`; some ship a *_list.csv that has a header anyway;
+    some ship it headerless. Detect rather than infer from the filename, and
+    prefer the modern file when both exist.
+    """
+    import pandas as pd
+
+    spatial = Path(visium_dir_path) / "spatial"
+    pos_file = None
+    for name in ("tissue_positions.csv", "tissue_positions_list.csv"):
+        if (spatial / name).exists():
+            pos_file = spatial / name
+            break
+    if pos_file is None:
+        raise FileNotFoundError(f"No tissue_positions file under {spatial}")
+
+    # A header row has a non-numeric second field ("in_tissue"); a data row does not.
+    first = pd.read_csv(pos_file, header=None, nrows=1)
+    has_header = not pd.api.types.is_numeric_dtype(first.iloc[:, 1])
+
+    pos = pd.read_csv(pos_file, header=0 if has_header else None,
+                      names=POSITION_COLUMNS)
+    for col in POSITION_COLUMNS[1:]:
+        pos[col] = pd.to_numeric(pos[col], errors="coerce")
+    return pos.reset_index(drop=True)
+
+
 def read_spot_coordinates(library_id: str, cfg: dict):
     """Return (barcodes, xy_pixels) aligned to the filtered matrix spot order.
 
@@ -133,7 +168,6 @@ def read_spot_coordinates(library_id: str, cfg: dict):
     """
     import h5py
     import numpy as np
-    import pandas as pd
 
     vdir = visium_dir(library_id, cfg)
 
@@ -142,23 +176,7 @@ def read_spot_coordinates(library_id: str, cfg: dict):
         barcodes = f["matrix/barcodes"][:]
     barcodes = np.array([b.decode() if isinstance(b, bytes) else b for b in barcodes])
 
-    # tissue_positions file (newer: tissue_positions.csv with header; older: list, no header)
-    spatial = vdir / "spatial"
-    pos_file = None
-    for name in ("tissue_positions.csv", "tissue_positions_list.csv"):
-        if (spatial / name).exists():
-            pos_file = spatial / name
-            break
-    if pos_file is None:
-        raise FileNotFoundError(f"No tissue_positions file under {spatial}")
-
-    if pos_file.name == "tissue_positions.csv":
-        pos = pd.read_csv(pos_file)
-    else:
-        pos = pd.read_csv(pos_file, header=None, names=[
-            "barcode", "in_tissue", "array_row", "array_col",
-            "pxl_row_in_fullres", "pxl_col_in_fullres"])
-    pos = pos.set_index("barcode")
+    pos = load_tissue_positions(vdir).set_index("barcode")
 
     keep = [b for b in barcodes if b in pos.index]
     pos = pos.loc[keep]

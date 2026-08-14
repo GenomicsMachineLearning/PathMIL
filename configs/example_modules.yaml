@@ -28,6 +28,13 @@ targets:
   # CSV with columns `module` and `id`; the bundled file is a small example.
   modules_csv: assets/modules/example_gene_modules.csv
 
+model:
+  # Module scores are z-scored across spots, so roughly half of every target is
+  # negative by construction. The non-negative head the gene default ships
+  # (softplus) would train the model to emit ~0 for half the data, so modules
+  # mode must turn it off. `spamil train` refuses the combination outright.
+  output_activation: linear
+
 train:
   epochs: 5
   batch_size: 16

@@ -54,6 +54,16 @@ class MILRegressionDiskDataset(Dataset):
     def get_sample_indices(self, lib_id: str) -> np.ndarray:
         return np.where(self.lib_ids == lib_id)[0]
 
+    def target_mean(self, max_spots: int = 2000) -> float:
+        """Mean target value over a sample of spots, for output bias init.
+
+        Build this from the TRAINING samples only, or the held-out sample's mean
+        leaks into where the model starts.
+        """
+        step = max(1, self.total_spots // max_spots)
+        vals = [float(self[i][1].mean()) for i in range(0, self.total_spots, step)]
+        return float(np.mean(vals)) if vals else 0.0
+
 
 class MILTestDataset(Dataset):
     """Embeddings-only dataset for prediction on new samples (no targets)."""

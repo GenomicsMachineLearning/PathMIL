@@ -18,7 +18,7 @@ from tqdm import tqdm
 from spamil.config import cget
 from spamil.data import MILRegressionDiskDataset, load_sample_info_from_directory
 from spamil.metrics import calculate_metrics
-from spamil.model import build_model, save_checkpoint
+from spamil.model import build_model, check_activation_matches_target, save_checkpoint
 from spamil.utils import get_logger, get_device, set_seed
 
 log = get_logger()
@@ -89,6 +89,65 @@ def _make_loaders(cfg, dataset, train_idx, eval_idx=None):
     return train_loader, eval_loader
 
 
+def _resolve_bias_init(cfg, train_dataset):
+    """Where the instance head starts, in target units.
+
+    `softplus(0) = 0.693` against a log1p-normalised target mean of ~0.016 is a
+    ~43x overshoot on every output column, so a non-negative head that starts at
+    the torch default spends its first epochs walking the bias down.
+    """
+    if not cget(cfg, "model.bias_init_from_data", True):
+        return cget(cfg, "model.output_bias_init")
+    return train_dataset.target_mean()
+
+
+def _apply_bias_init(cfg, train_dataset):
+    """Resolve the bias init and write it back into `cfg`, where build_model reads it."""
+    bias_init = _resolve_bias_init(cfg, train_dataset)
+    cfg.setdefault("model", {})["output_bias_init"] = bias_init
+    if bias_init is not None:
+        log.info("Initialising output bias so the head starts at %.6g", bias_init)
+    return bias_init
+
+
+def _peek_scale(h5_path) -> dict:
+    """Patch geometry the bags were built at, read from the combined H5.
+
+    Taken from the data rather than the config, so a checkpoint cannot claim a
+    scale its embeddings were not cut at. Absent for H5s built before
+    `preprocess` recorded it.
+    """
+    import h5py
+    with h5py.File(h5_path, "r") as hf:
+        return {k: float(hf.attrs[k]) for k in ("target_mpp", "fov_um") if k in hf.attrs}
+
+
+def _provenance(cfg, train_lib_ids, scale=None, **extra) -> dict:
+    """What a checkpoint must carry to still be readable a year from now.
+
+    Without this a checkpoint cannot say what scale its targets were baked at,
+    what physical field of view it was shown, which samples it saw, or with which
+    seed. The *factors* are stored rather than a label: a label is a naming
+    convention and can drift, the factors cannot. `output_activation` and
+    `attention_mode` are already in the checkpoint's `config` block, written by
+    `save_checkpoint`.
+
+    `scale` comes from the training H5s, not the config -- see `_peek_scale`.
+    """
+    return {
+        "target_sum": float(cget(cfg, "targets.target_sum", 1e4)),
+        "output_bias_init": cget(cfg, "model.output_bias_init"),
+        "seed": int(cget(cfg, "train.seed", 0)),
+        "epochs": int(cget(cfg, "train.epochs", 5)),
+        "lr": float(cget(cfg, "train.lr", 1e-4)),
+        "batch_size": int(cget(cfg, "train.batch_size", 16)),
+        "n_train_samples": len(train_lib_ids),
+        "train_lib_ids": list(train_lib_ids),
+        **(scale or {}),
+        **extra,
+    }
+
+
 def _build_optim(cfg, model):
     import torch.nn as nn
     import torch.optim as optim
@@ -116,11 +175,12 @@ def run_train(cfg: dict, paths: dict, mode=None, target=None, sample_index=None,
     dataset = MILRegressionDiskDataset(sample_info)
     n_outputs = _peek_n_outputs(sample_info[0]["file_path"])
     target_type, target_names = load_target_names(cfg, paths, target, n_outputs)
+    check_activation_matches_target(cfg, target_type)
     log.info("Mode=%s target=%s | %d samples, %d spots, %d outputs, device=%s",
              mode, target, len(sample_info), len(dataset), n_outputs, device)
 
     if mode == "full":
-        _run_full(cfg, paths, dataset, n_outputs, target_type, target_names,
+        _run_full(cfg, paths, dataset, sample_info, n_outputs, target_type, target_names,
                   device, epochs, grad_clip)
     elif mode == "loo":
         if sample_index is None:
@@ -153,9 +213,14 @@ def _save_losses(out_dir: Path, losses):
         out_dir / "training_losses.csv", index=False)
 
 
-def _run_full(cfg, paths, dataset, n_outputs, target_type, target_names,
+def _run_full(cfg, paths, dataset, sample_info, n_outputs, target_type, target_names,
               device, epochs, grad_clip):
+    train_libs = [s["library_id"] for s in sample_info]
+    scale = _peek_scale(sample_info[0]["file_path"])
     train_loader, _ = _make_loaders(cfg, dataset, np.arange(len(dataset)))
+    # Every sample is a training sample here, so the whole dataset is the right
+    # source for the bias init.
+    _apply_bias_init(cfg, dataset)
     model = build_model(cfg, n_outputs).to(device)
     log.info("Model params: %d", sum(p.numel() for p in model.parameters()))
     optimizer, losses = _train_loop(cfg, model, train_loader, device, epochs, grad_clip)
@@ -165,7 +230,8 @@ def _run_full(cfg, paths, dataset, n_outputs, target_type, target_names,
     _save_losses(out_dir, losses)
     ckpt = out_dir / "model_checkpoint.pth"
     save_checkpoint(ckpt, model, optimizer, target_type=target_type,
-                    target_names=target_names, train_losses=losses)
+                    target_names=target_names, train_losses=losses,
+                    extra=_provenance(cfg, train_libs, scale=scale, mode="full"))
     log.info("Saved full-training checkpoint -> %s", ckpt)
 
 
@@ -181,6 +247,11 @@ def _run_loo(cfg, paths, dataset, sample_info, sample_index, n_outputs,
     test_set = set(test_idx.tolist())
     train_idx = np.array([i for i in range(len(dataset)) if i not in test_set])
     train_loader, test_loader = _make_loaders(cfg, dataset, train_idx, test_idx)
+
+    # From the TRAINING samples only -- the whole dataset would leak the
+    # held-out sample's target mean into where the model starts.
+    train_info = [s for s in sample_info if s["library_id"] != test_lib]
+    _apply_bias_init(cfg, MILRegressionDiskDataset(train_info))
 
     model = build_model(cfg, n_outputs).to(device)
     optimizer, losses = _train_loop(cfg, model, train_loader, device, epochs, grad_clip)
@@ -210,5 +281,7 @@ def _run_loo(cfg, paths, dataset, sample_info, sample_index, n_outputs,
     save_checkpoint(out_dir / "model_checkpoint.pth", model, optimizer,
                     target_type=target_type, target_names=target_names,
                     train_losses=losses, metrics=metrics,
-                    extra={"test_lib_id": test_lib})
+                    extra=_provenance(cfg, [s["library_id"] for s in train_info],
+                                      scale=_peek_scale(train_info[0]["file_path"]),
+                                      mode="loo", test_lib_id=test_lib))
     log.info("Saved LOO results -> %s", out_dir)

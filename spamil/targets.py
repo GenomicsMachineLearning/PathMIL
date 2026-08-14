@@ -2,10 +2,13 @@
 
 Ported from notebooks 03_train_MIL / 03_02_train_MIL_ms. For each sample it reads
 the lightweight expression matrix (spot order == embedding order, both follow the
-filtered matrix barcode order), normalises (total + log1p), derives the target
-(top-N HVG genes, or per-module mean expression z-scored across spots), aligns to
-the embeddings, and writes `<lib>.h5` (embeddings + gene_expression + n_spots) into
-work_dir/mil_processed_samples/.
+filtered matrix barcode order), normalises (total to a fixed `targets.target_sum`,
+then log1p), derives the target (top-N HVG genes, or per-module mean expression
+z-scored across spots), aligns to the embeddings, and writes `<lib>.h5`
+(embeddings + gene_expression + n_spots) into work_dir/mil_processed_samples/.
+
+The target scale is fixed here, at build time, and no training flag can change it
+later -- see `_normalised_expr_df`.
 
 Also writes the reusable `gene_list.pkl` / `modules_info.pkl` so training and
 prediction share an identical target definition.
@@ -97,6 +100,11 @@ def build_or_load_modules_info(cfg: dict, paths: dict) -> dict:
 # --------------------------------------------------------------------------- #
 # Per-sample combined H5 construction
 # --------------------------------------------------------------------------- #
+# Patch-geometry attrs written by `preprocess`, carried through to the combined H5
+# so a trained checkpoint can say what physical scale it was shown.
+SCALE_ATTRS = ("target_mpp", "slide_mpp", "fov_um", "patch_size", "read_px")
+
+
 def _load_embeddings(paths: dict, lib_id: str) -> np.ndarray:
     emb_file = Path(paths["embeddings"]) / f"{lib_id}_patch_embeddings.h5"
     if not emb_file.exists():
@@ -105,10 +113,23 @@ def _load_embeddings(paths: dict, lib_id: str) -> np.ndarray:
         return f["embeddings"][:]
 
 
+def _scale_attrs(paths: dict, lib_id: str) -> dict:
+    """Patch-geometry attrs from the embeddings H5, if `preprocess` recorded them."""
+    emb_file = Path(paths["embeddings"]) / f"{lib_id}_patch_embeddings.h5"
+    with h5py.File(emb_file, "r") as f:
+        return {k: f.attrs[k] for k in SCALE_ATTRS if k in f.attrs}
+
+
 def _normalised_expr_df(cfg: dict, lib_id: str) -> pd.DataFrame:
     import scanpy as sc
+    # Fixed T, never scanpy's default. With `target_sum=None` normalize_total
+    # falls back to *this sample's* median library size, so every sample lands on
+    # its own target scale. The target is baked into the H5 here and cannot be
+    # rescaled at training time, so a per-sample scale would leave one head
+    # fitting every sample's sequencing depth at once.
+    target_sum = float(cget(cfg, "targets.target_sum", 1e4))
     adata = sio.load_expression(lib_id, cfg)
-    sc.pp.normalize_total(adata, inplace=True)
+    sc.pp.normalize_total(adata, target_sum=target_sum, inplace=True)
     sc.pp.log1p(adata)
     return adata.to_df()
 
@@ -142,7 +163,8 @@ def process_sample_genes(cfg: dict, paths: dict, lib_id: str, gene_list: list,
     y = np.zeros((expr.shape[0], len(gene_list)), dtype=np.float32)
     if available:
         y[:, [gene_list.index(g) for g in available]] = expr[available].values
-    shape = _write_combined(out_file, X, y, lib_id, {"n_genes": len(gene_list)})
+    shape = _write_combined(out_file, X, y, lib_id,
+                            {"n_genes": len(gene_list), **_scale_attrs(paths, lib_id)})
     log.info("[%s] wrote genes target X=%s y=(%d,%d)", lib_id, shape, shape[0], len(gene_list))
     return True
 
@@ -164,7 +186,8 @@ def process_sample_modules(cfg: dict, paths: dict, lib_id: str, info: dict,
     module_scores = module_scores.apply(scipy_zscore, axis=0).fillna(0.0)
     y = module_scores.values.astype(np.float32)
 
-    shape = _write_combined(out_file, X, y, lib_id, {"n_modules": info["n_modules"]})
+    shape = _write_combined(out_file, X, y, lib_id,
+                            {"n_modules": info["n_modules"], **_scale_attrs(paths, lib_id)})
     log.info("[%s] wrote modules target X=%s y=(%d,%d)", lib_id, shape, shape[0], info["n_modules"])
     return True
 

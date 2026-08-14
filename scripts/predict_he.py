@@ -31,6 +31,10 @@ Segmentation runs per tile on a slightly padded crop, and a nucleus is kept only
 tile whose core contains its centroid. Tile ownership is therefore a partition: cells
 straddling a tile seam are detected twice but kept once, so nothing is double-counted.
 
+Under a per-gene-attention checkpoint the attention carries a target axis, making it as
+large as the instance scores it sits beside. --no-save-attention drops it -- from memory
+as well as from disk -- and leaves every prediction untouched.
+
 Example
 -------
     python scripts/predict_he.py \
@@ -286,6 +290,18 @@ def _fov_geometry(reader: SlideReader, tile_size: int, stride: int, target_mpp):
     return tile_size, stride
 
 
+def _instance_store_gb(n_tiles, n_targets, per_gene, keep_attention):
+    """GB the --sc_pred stores need: the instance array, plus attention if it is kept.
+
+    Per-gene attention is narrowed to the same columns as the instances, so it is a
+    second array of identical shape -- the dominant term alongside the scores. Shared
+    attention is (n_tiles, 256) and negligible beside either, and --no-save-attention
+    drops the term entirely.
+    """
+    n_stores = 2 if (per_gene and keep_attention) else 1
+    return n_stores * n_tiles * TOKENS_PER_SIDE ** 2 * n_targets * 4 / 1e9
+
+
 def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, model, args,
                   device, inst_cols=None, seg_model=None, emb_h5_path: Path | None = None):
     """Stream one slide through Virchow2 -> MIL; return (tile_xy, bag_preds, attrs, sc).
@@ -298,6 +314,10 @@ def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, mod
     and every nucleus is scored from the MIL instance head; `sc` then carries the
     per-tile instance predictions/attention and the per-cell table. Otherwise `sc` is
     None and the behaviour is byte-for-byte the tile-level path.
+
+    Under --no-save-attention the attention is never accumulated -- not merely left
+    unwritten -- so `sc["attention"]` and `sc["cell_attention"]` are None and the peak
+    memory really does drop. Everything else is unchanged.
     """
     import torch
     from PIL import Image
@@ -311,6 +331,7 @@ def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, mod
     log.info("[%s] %d candidate tiles", slide_path.name, len(coords))
 
     sc_pred = seg_model is not None
+    keep_attn = sc_pred and not args.no_save_attention
     token_step = read_size / TOKENS_PER_SIDE   # native px covered by one Virchow2 token
     margin = int(args.seg_margin) if sc_pred else 0
     crop_size = read_size + 2 * margin
@@ -318,16 +339,24 @@ def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, mod
     if sc_pred:
         # Upper bound: every candidate tile kept. The instance array is what makes
         # --sc_pred expensive, so refuse up front rather than dying mid-slide.
-        need_gb = len(coords) * 256 * len(inst_cols) * 4 / 1e9
+        per_gene = getattr(model, "attention_mode", "shared") == "per_gene"
+        both = per_gene and keep_attn
+        need_gb = _instance_store_gb(len(coords), len(inst_cols), per_gene, keep_attn)
         if need_gb > args.max_instance_gb:
             raise MemoryError(
                 f"--sc_pred would need up to {need_gb:.1f} GB to hold instance "
-                f"predictions for {len(inst_cols)} targets over {len(coords)} tiles "
+                f"predictions{' and per-gene attention' if both else ''} "
+                f"for {len(inst_cols)} targets over {len(coords)} tiles "
                 f"(limit --max-instance-gb={args.max_instance_gb}). Pass --targets to "
-                f"score only the targets you need, or raise --max-instance-gb.")
+                f"score only the targets you need, "
+                f"{'--no-save-attention to drop the attention half, ' if both else ''}"
+                f"or raise --max-instance-gb.")
         log.info("[%s] --sc_pred: token step %.2f px, seg margin %d px, %d targets; "
-                 "instance store <= %.1f GB", slide_path.name, token_step, margin,
-                 len(inst_cols), need_gb)
+                 "instance%s store <= %.1f GB", slide_path.name, token_step, margin,
+                 len(inst_cols), "+attention" if both else "", need_gb)
+        if not keep_attn:
+            log.info("[%s] --no-save-attention: attention is neither accumulated nor "
+                     "written", slide_path.name)
 
     kept: list = []
     preds: list = []
@@ -374,12 +403,22 @@ def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, mod
 
         if sc_pred:
             inst_np = inst.cpu().numpy()[:, :, inst_cols]  # (B, 256, n_targets)
-            attn_np = attn.cpu().numpy()                   # (B, 256)
+            attn_np = None
+            if keep_attn:
+                # (B, 256) under shared attention; (B, 256, n_outputs) under per-gene,
+                # where it must be narrowed by the SAME columns as the instances --
+                # otherwise the attention store stays at the full target set, which is
+                # both the dominant memory term and a different set of targets from
+                # the scores sitting next to it.
+                attn_np = attn.cpu().numpy()
+                if attn_np.ndim == 3:
+                    attn_np = attn_np[:, :, inst_cols]     # (B, 256, n_targets)
+                attn_all.append(attn_np)
             inst_all.append(inst_np)
-            attn_all.append(attn_np)
             for b, ((tx, ty), (ox, oy, crop)) in enumerate(zip(batch_xy, batch_crops)):
                 _score_cells_in_tile(seg_model, crop, ox, oy, tx, ty, read_size,
-                                     token_step, inst_np[b], attn_np[b], args,
+                                     token_step, inst_np[b],
+                                     attn_np[b] if attn_np is not None else None, args,
                                      cell_xy, cell_area, cell_poly, cell_score, cell_attn)
 
         kept.extend(batch_xy)
@@ -452,12 +491,15 @@ def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, mod
                          100 * (len(xy) - len(keep)) / max(1, len(xy)))
             sc = {
                 "instance": np.concatenate(inst_all, axis=0),     # (n_tiles, 256, n_tgt)
-                "attention": np.concatenate(attn_all, axis=0),    # (n_tiles, 256)
+                # None under --no-save-attention; otherwise (n_tiles, 256) shared or
+                # (n_tiles, 256, n_tgt) per-gene.
+                "attention": np.concatenate(attn_all, axis=0) if keep_attn else None,
                 "cell_xy": xy[keep],
                 "cell_area": np.asarray(cell_area, dtype="float32")[keep],
                 "cell_score": np.asarray(cell_score, dtype="float32").reshape(
                     -1, len(inst_cols))[keep],
-                "cell_attention": np.asarray(cell_attn, dtype="float32")[keep],
+                "cell_attention": (np.asarray(cell_attn, dtype="float32")[keep]
+                                   if keep_attn else None),
                 "cell_poly": [cell_poly[i] for i in keep],
             }
             log.info("[%s] segmented %d nuclei (%.1f per tile)", slide_path.name,
@@ -530,7 +572,13 @@ def _score_cells_in_tile(seg_model, crop, ox, oy, tile_x, tile_y, read_size, tok
         cell_area.append(areas[i])
         cell_poly.append(poly)
         cell_score.append(inst[toks].mean(axis=0))      # mean over overlapping tokens
-        cell_attn.append(float(attn[toks].mean()))
+        if attn is None:                                # --no-save-attention
+            continue
+        # Shared attention is (256,) -> one weight per nucleus. Per-gene attention
+        # is (256, n_targets) -> one weight per nucleus PER TARGET; averaging that
+        # down to a scalar would silently mix every target into one number.
+        cell_attn.append(attn[toks].mean(axis=0) if attn.ndim == 2
+                         else float(attn[toks].mean()))
 
 
 # -------------------------------------------------------------------------- heatmaps
@@ -772,8 +820,19 @@ def _write_segmentation_zoom(sample_id, reader, tile_xy, attrs, sc, out_dir, arg
 def write_cell_table(sample_id, names, sc, out_dir):
     """Write the per-nucleus table: CSV always, GeoParquet with polygons if possible."""
     cells_xy = sc["cell_xy"]
+    # None under --no-save-attention -- the block is then omitted entirely rather
+    # than written as a column of NaNs.
+    attention = None if sc["cell_attention"] is None else np.asarray(sc["cell_attention"])
     df = pd.DataFrame(sc["cell_score"], columns=names)
-    df.insert(0, "attention", sc["cell_attention"])
+    if attention is None:
+        pass
+    elif attention.ndim == 2:
+        # Per-gene attention: one weight per nucleus per target. Appended rather
+        # than inserted, so the identifier columns keep their positions.
+        for j, name in enumerate(names):
+            df[f"attention_{name}"] = attention[:, j]
+    else:
+        df.insert(0, "attention", attention)
     df.insert(0, "area", sc["cell_area"])
     df.insert(0, "y", cells_xy[:, 1])
     df.insert(0, "x", cells_xy[:, 0])
@@ -823,8 +882,9 @@ def build_parser():
 
     p.add_argument("--target-mpp", type=float, default=None,
                    help="Microns-per-pixel the model was TRAINED at. Tiles are read at "
-                        "the matching physical size and resized to --tile-size. Omit to "
-                        "tile at the slide's native resolution.")
+                        "the matching physical size and resized to --tile-size. Defaults "
+                        "to the value recorded in the checkpoint; pass 0 to force native "
+                        "resolution when the checkpoint carries one.")
     p.add_argument("--tile-size", type=int, default=224, help="Model input tile size (px)")
     p.add_argument("--stride", type=int, default=224,
                    help="Stride between tiles, in model-tile px (scaled with --target-mpp)")
@@ -867,6 +927,13 @@ def build_parser():
     g.add_argument("--max-instance-gb", type=float, default=8.0,
                    help="Refuse to hold the (n_tiles, 256, n_targets) instance array if "
                         "it would exceed this; pass --targets to restrict instead.")
+    g.add_argument("--no-save-attention", action="store_true",
+                   help="Drop the attention outputs: no instance_attention.npy, and no "
+                        "attention column(s) in cells.csv/.parquet. Under a per-gene "
+                        "checkpoint the attention array is the same size as the instance "
+                        "store, so this roughly halves both peak memory and output size; "
+                        "under shared attention it only saves a small file. Instance and "
+                        "cell predictions are unchanged.")
 
     p.add_argument("--save-embeddings", action="store_true",
                    help="Also write the raw (n_tiles, 256, 1280) Virchow2 tokens to H5. "
@@ -895,6 +962,37 @@ def main(argv=None):
         names = [f"target_{i}" for i in range(ckpt["config"]["num_outputs"])]
     log.info("Checkpoint %s: %s, %d outputs, running on %s",
              Path(args.checkpoint).name, ckpt.get("target_type", "?"), len(names), device)
+
+    # The field of view the model was trained at. Reading it from the checkpoint
+    # is the whole point of recording it: showing a model a different physical
+    # area than it was trained on degrades predictions silently, and requiring the
+    # user to remember the number is how that happens.
+    if args.target_mpp is None and ckpt.get("target_mpp"):
+        args.target_mpp = float(ckpt["target_mpp"])
+        log.info("Using --target-mpp %.4f from the checkpoint (%.1f um per tile); "
+                 "pass --target-mpp 0 to tile at native resolution instead",
+                 args.target_mpp, ckpt.get("fov_um", args.target_mpp * args.tile_size))
+    elif args.target_mpp is None:
+        log.warning("Neither --target-mpp nor a checkpoint target_mpp: tiling at the "
+                    "slide's native resolution. If this model was trained at a "
+                    "different magnification its field of view will be wrong.")
+    if args.sc_pred and ckpt["config"].get("attention_mode", "shared") == "per_gene":
+        # The attention tensor gains a target axis, so --sc_pred's attention
+        # outputs change shape (and the memory it needs roughly doubles).
+        if args.no_save_attention:
+            log.info(
+                "Per-gene attention checkpoint with --no-save-attention: the attention "
+                "is not accumulated, so no instance_attention.npy is written, cells.csv "
+                "has no attention columns, and the --sc_pred stores need about half the "
+                "memory they otherwise would.")
+        else:
+            log.info(
+                "Per-gene attention checkpoint: --sc_pred writes instance_attention.npy "
+                "as (n_tiles, 256, n_targets) and cells.csv gets one attention_<target> "
+                "column per scored target, not a single `attention` column. Attention is "
+                "narrowed by --targets alongside the instance scores, so it needs about "
+                "as much memory again as the instance store. Pass --no-save-attention to "
+                "drop it.")
     log.info("%d slide(s) to process", len(slides))
 
     # Which targets get instance / single-cell scores. With --targets we can slice the
@@ -939,7 +1037,8 @@ def main(argv=None):
 
             if sc is not None:
                 np.save(out_dir / "instance_predictions.npy", sc["instance"])
-                np.save(out_dir / "instance_attention.npy", sc["attention"])
+                if sc["attention"] is not None:
+                    np.save(out_dir / "instance_attention.npy", sc["attention"])
                 pd.DataFrame({"index": range(len(inst_names)), "target": inst_names}).to_csv(
                     out_dir / "instance_target_names.csv", index=False)
                 write_cell_table(sample_id, inst_names, sc, out_dir)

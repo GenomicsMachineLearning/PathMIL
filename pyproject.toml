@@ -68,12 +68,21 @@ he = [
     "pyarrow",
 ]
 
+# Test suite: `pip install -e .[dev] && pytest`. Core deps only — no GPU, no data.
+dev = ["pytest"]
+
 [project.urls]
 Homepage = "https://github.com/GenomicsMachineLearning/SpaMIL"
 Repository = "https://github.com/GenomicsMachineLearning/SpaMIL"
 
 [project.scripts]
 spamil = "spamil.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Put this checkout ahead of any installed `spamil` on sys.path, so the tests
+# exercise this tree and not a site-packages (or editable) copy elsewhere.
+pythonpath = ["."]
 
 [tool.setuptools]
 packages = ["spamil"]
