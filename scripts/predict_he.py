@@ -56,6 +56,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import triton
 # The script lives in scripts/; make the sibling package importable when run from a
 # source checkout that has not been pip-installed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
