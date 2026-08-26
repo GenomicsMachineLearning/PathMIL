@@ -48,15 +48,20 @@ Example
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import math
 import re
 import sys
 from pathlib import Path
+from PIL import Image
 
 import numpy as np
 import pandas as pd
 
 import triton
+import torch
+
+
 # The script lives in scripts/; make the sibling package importable when run from a
 # source checkout that has not been pip-installed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -254,7 +259,6 @@ def _tokens_for_bbox(x0, y0, x1, y1, tile_x, tile_y, step):
 
 
 def _load_virchow(model_name: str, device):
-    import torch
     import timm
     from timm.data import resolve_data_config
     from timm.data.transforms_factory import create_transform
@@ -302,6 +306,69 @@ def _instance_store_gb(n_tiles, n_targets, per_gene, keep_attention):
     n_stores = 2 if (per_gene and keep_attention) else 1
     return n_stores * n_tiles * TOKENS_PER_SIDE ** 2 * n_targets * 4 / 1e9
 
+@dataclass(frozen=True)
+class BatchPredictions:
+    bag_predictions: np.ndarray
+    patch_tokens: np.ndarray | None
+    instance_predictions: np.ndarray | None
+    attention: np.ndarray | None
+
+def _infer_batch(
+    imgs,
+    virchow_model,
+    mil_model,
+    device,
+    *,
+    sc_pred: bool,
+    instance_target_indices,
+    keep_attention: bool,
+    return_patch_tokens: bool,
+) -> BatchPredictions:
+    """Inference for a single batch"""
+
+    inputs = torch.cat(imgs, dim=0).to(device)
+
+    with torch.inference_mode():
+        # Virchow 2 outputs a class token + 4 register tokens + 256 (16*16) patch tokens
+        # We are only interested in the patch tokens
+        patch_tokens_tensor = virchow_model(inputs)[:, 5:].contiguous().float()
+
+        if sc_pred:
+            bag_tensor, instance_tensor, attention_tensor = mil_model(
+                patch_tokens_tensor,
+                return_instance_predictions = True
+            )
+        else:
+            bag_tensor = mil_model(patch_tokens_tensor)
+
+    bag_predictions = bag_tensor.cpu().numpy()
+
+    patch_tokens = (
+        patch_tokens_tensor.cpu().numpy()
+        if return_patch_tokens
+        else None
+    )
+
+    instance_predictions = None
+    attention = None
+
+    if sc_pred:
+        instance_predictions = instance_tensor.cpu().numpy()[:, :, instance_target_indices]
+
+        if keep_attention:
+            # Attention can be implemented in two ways
+            # First as a single attention score per patch - shape: (batch_size, 256)
+            # Second a an attention score for every gene in a patch - shape: (batch_size, 256, genes)
+            attention = attention_tensor.cpu().numpy()
+            if attention.ndim == 3:
+                attention = attention[:, :, instance_target_indices]
+
+    return BatchPredictions(
+        bag_predictions=bag_predictions,
+        patch_tokens=patch_tokens,
+        instance_predictions=instance_predictions,
+        attention=attention
+    )
 
 def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, model, args,
                   device, inst_cols=None, seg_model=None, emb_h5_path: Path | None = None):
@@ -320,8 +387,6 @@ def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, mod
     unwritten -- so `sc["attention"]` and `sc["cell_attention"]` are None and the peak
     memory really does drop. Everything else is unchanged.
     """
-    import torch
-    from PIL import Image
 
     log.info("[%s] %d x %d px, mpp=%s", slide_path.name, reader.width, reader.height,
              f"{reader.mpp:.4f}" if reader.mpp else "unknown")
@@ -385,37 +450,35 @@ def predict_slide(slide_path: Path, reader: SlideReader, virchow, transform, mod
     def flush():
         if not batch:
             return
-        x = torch.cat(batch, dim=0).to(device)
-        with torch.no_grad():
-            # Virchow2 returns [CLS] + 4 register tokens + 256 spatial tokens; the MIL
-            # bag is the 256 spatial tokens only. The slice is a non-contiguous view and
-            # the regressor reshapes with .view(), so make it contiguous first.
-            tokens = virchow(x)[:, 5:].contiguous()       # (B, 256, 1280)
-            if sc_pred:
-                bag, inst, attn = model(tokens.float(), return_instance_predictions=True)
-            else:
-                bag = model(tokens.float())               # (B, n_outputs)
-        preds.append(bag.cpu().numpy())
+
+        result = _infer_batch(
+            batch,
+            virchow,
+            model,
+            device,
+            sc_pred=sc_pred,
+            instance_target_indices=inst_cols,
+            keep_attention=keep_attn,
+            return_patch_tokens=emb_ds is not None
+        )
+
+        preds.append(result.bag_predictions)
+
         if emb_ds is not None:
-            arr = tokens.cpu().float().numpy()
+            arr = result.patch_tokens
             start = emb_ds.shape[0]
             emb_ds.resize((start + arr.shape[0], 256, 1280))
             emb_ds[start:start + arr.shape[0]] = arr
 
         if sc_pred:
-            inst_np = inst.cpu().numpy()[:, :, inst_cols]  # (B, 256, n_targets)
-            attn_np = None
-            if keep_attn:
-                # (B, 256) under shared attention; (B, 256, n_outputs) under per-gene,
-                # where it must be narrowed by the SAME columns as the instances --
-                # otherwise the attention store stays at the full target set, which is
-                # both the dominant memory term and a different set of targets from
-                # the scores sitting next to it.
-                attn_np = attn.cpu().numpy()
-                if attn_np.ndim == 3:
-                    attn_np = attn_np[:, :, inst_cols]     # (B, 256, n_targets)
-                attn_all.append(attn_np)
+            inst_np = result.instance_predictions  # (B, 256, n_targets)
+            attn_np = result.attention
+
             inst_all.append(inst_np)
+
+            if keep_attn:
+                attn_all.append(attn_np)
+
             for b, ((tx, ty), (ox, oy, crop)) in enumerate(zip(batch_xy, batch_crops)):
                 _score_cells_in_tile(seg_model, crop, ox, oy, tx, ty, read_size,
                                      token_step, inst_np[b],
