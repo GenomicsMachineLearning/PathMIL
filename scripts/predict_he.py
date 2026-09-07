@@ -56,7 +56,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import triton
+# Import triton before tensorflow (pulled in by stardist under --sc_pred): the
+# reverse order segfaults. Triton has no macOS build, so tolerate its absence.
+try:
+    import triton  # noqa: F401
+except ImportError:
+    pass
 # The script lives in scripts/; make the sibling package importable when run from a
 # source checkout that has not been pip-installed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
