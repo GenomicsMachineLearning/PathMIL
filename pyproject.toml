@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spamil"
-version = "0.1.0"
-description = "SpaMIL: attention-based Multiple Instance Learning for predicting gene/module expression from Visium H&E histology"
+name = "pathmil"
+version = "0.2.0"
+description = "PathMIL: attention-based Multiple Instance Learning for predicting gene/module expression from Visium H&E histology"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -72,20 +72,20 @@ he = [
 dev = ["pytest"]
 
 [project.urls]
-Homepage = "https://github.com/GenomicsMachineLearning/SpaMIL"
-Repository = "https://github.com/GenomicsMachineLearning/SpaMIL"
+Homepage = "https://github.com/GenomicsMachineLearning/PathMIL"
+Repository = "https://github.com/GenomicsMachineLearning/PathMIL"
 
 [project.scripts]
-spamil = "spamil.cli:main"
+pathmil = "pathmil.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Put this checkout ahead of any installed `spamil` on sys.path, so the tests
+# Put this checkout ahead of any installed `pathmil` on sys.path, so the tests
 # exercise this tree and not a site-packages (or editable) copy elsewhere.
 pythonpath = ["."]
 
 [tool.setuptools]
-packages = ["spamil"]
+packages = ["pathmil"]
 
 [tool.setuptools.package-data]
-spamil = ["../configs/*.yaml"]
+pathmil = ["../configs/*.yaml"]

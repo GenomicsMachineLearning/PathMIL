@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from spamil.config import cget, expand
+from pathmil.config import cget, expand
 
 H5_NAME = "filtered_feature_bc_matrix.h5"
 

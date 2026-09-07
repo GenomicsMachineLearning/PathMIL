@@ -43,7 +43,7 @@ def spot_pitch_px(positions) -> float:
 
     Args:
         positions: frame with `array_row`, `array_col`, `pxl_row_in_fullres`,
-            `pxl_col_in_fullres` (as returned by `spamil.io.load_tissue_positions`).
+            `pxl_col_in_fullres` (as returned by `pathmil.io.load_tissue_positions`).
 
     Uses the median so a handful of misplaced spots cannot move the estimate, and
     the full 2-D distance so the answer is rotation-invariant.
@@ -80,7 +80,7 @@ def slide_mpp_from_positions(positions, pitch_um: float = SPOT_PITCH_UM) -> floa
 
 def slide_mpp(library_id: str, cfg: dict) -> float:
     """Micrometres per pixel for one sample, read from its `spatial/` directory."""
-    from spamil import io as sio
+    from pathmil import io as sio
 
     return slide_mpp_from_positions(
         sio.load_tissue_positions(sio.visium_dir(library_id, cfg)))
@@ -107,7 +107,7 @@ def resolve_patch_geometry(library_id: str, cfg: dict) -> dict:
     `embed.patch_size` native pixels and do no rescaling -- so every pre-existing
     config and checkpoint is unaffected.
     """
-    from spamil.config import cget
+    from pathmil.config import cget
 
     patch_size = int(cget(cfg, "embed.patch_size", 224))
     image_patch_width = int(cget(cfg, "embed.image_patch_width", patch_size))

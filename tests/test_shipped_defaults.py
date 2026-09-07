@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import pytest
 
-from spamil.config import DEFAULT_CONFIG_PATH, cget, load_config
-from spamil.model import build_model, check_activation_matches_target
+from pathmil.config import DEFAULT_CONFIG_PATH, cget, load_config
+from pathmil.model import build_model, check_activation_matches_target
 
 CONFIG_DIR = DEFAULT_CONFIG_PATH.parent
 

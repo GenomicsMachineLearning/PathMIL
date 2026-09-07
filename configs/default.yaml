@@ -1,4 +1,4 @@
-# SpaMIL base configuration.
+# PathMIL base configuration.
 # A dataset config (e.g. example.yaml) is deep-merged on top of this,
 # then any CLI `--override key=value` is applied last.
 
@@ -41,7 +41,7 @@ embed:
   # the same micrometres of tissue per instance (224 * 0.2535 = 56.8 um, about one
   # Visium spot) whatever the scanner did. Without it a fixed 224 px patch is 56.7
   # um on a 0.25 um/px slide and 298.6 um on a 1.33 um/px one.
-  # slide_mpp is MEASURED from the 100 um spot pitch (spamil/scale.py); do NOT
+  # slide_mpp is MEASURED from the 100 um spot pitch (pathmil/scale.py); do NOT
   # substitute 55/spot_diameter_fullres, which is wrong by 9-29%.
   # Set to null for the historical behaviour: read patch_size native px, no rescale.
   target_mpp: 0.2535

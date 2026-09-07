@@ -1,6 +1,6 @@
 # Example dataset config (gene targets).
 # Copy this file, point the paths at your own Visium data, and run:
-#   spamil <step> --config configs/example.yaml
+#   pathmil <step> --config configs/example.yaml
 # Only the keys you want to change need to be present; everything else falls
 # back to configs/default.yaml.
 
@@ -20,7 +20,7 @@ dataset:
 
 paths:
   # Persistent outputs (embeddings, models, predictions, plots) live here.
-  work_dir: ./spamil_work
+  work_dir: ./pathmil_work
   # Fast per-job scratch; falls back to <work_dir>/tmp if unset.
   tmp_dir: $TMPDIR
 

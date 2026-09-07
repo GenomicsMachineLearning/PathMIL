@@ -2,8 +2,8 @@
 # Same dataset as example.yaml, but regresses gene-module scores instead of
 # individual genes. Point targets.modules_csv at a CSV with columns
 # `module` and `id` (gene symbol). Run with:
-#   spamil build-targets --config configs/example_modules.yaml --target modules
-#   spamil train         --config configs/example_modules.yaml --target modules --mode full
+#   pathmil build-targets --config configs/example_modules.yaml --target modules
+#   pathmil train         --config configs/example_modules.yaml --target modules --mode full
 
 dataset:
   name: example_visium_modules
@@ -14,7 +14,7 @@ dataset:
   samples: auto
 
 paths:
-  work_dir: ./spamil_work
+  work_dir: ./pathmil_work
   tmp_dir: $TMPDIR
 
 embed:
@@ -32,7 +32,7 @@ model:
   # Module scores are z-scored across spots, so roughly half of every target is
   # negative by construction. The non-negative head the gene default ships
   # (softplus) would train the model to emit ~0 for half the data, so modules
-  # mode must turn it off. `spamil train` refuses the combination outright.
+  # mode must turn it off. `pathmil train` refuses the combination outright.
   output_activation: linear
 
 train:

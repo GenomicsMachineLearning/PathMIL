@@ -6,7 +6,7 @@ One script, three stages, no intermediate files:
     slide -> tissue tiles -> Virchow2 patch tokens -> MIL regressor -> per-tile scores
 
 Each tissue tile is one MIL bag: Virchow2 returns 256 spatial tokens per 224px tile,
-which is exactly the `(n_bags, 256, 1280)` input the SpaMIL regressor was trained on.
+which is exactly the `(n_bags, 256, 1280)` input the PathMIL regressor was trained on.
 Tiles are streamed straight from the foundation model into the MIL head, so the
 `(n_tiles, 256, 1280)` float32 embedding array -- tens of GB on a whole-slide image --
 is never materialized. Pass --save-embeddings if you want it on disk anyway.
@@ -61,8 +61,8 @@ import triton
 # source checkout that has not been pip-installed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from spamil.model import load_checkpoint  # noqa: E402
-from spamil.utils import get_logger  # noqa: E402
+from pathmil.model import load_checkpoint  # noqa: E402
+from pathmil.utils import get_logger  # noqa: E402
 
 log = get_logger()
 
@@ -874,11 +874,11 @@ def _resolve_slides(slide_args) -> list:
 def build_parser():
     p = argparse.ArgumentParser(
         description="Predict gene / gene-module scores from an H&E slide with a trained "
-                    "SpaMIL checkpoint.",
+                    "PathMIL checkpoint.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--slide", required=True, action="append",
                    help="Slide image, or a directory of them. Repeatable.")
-    p.add_argument("--checkpoint", required=True, help="Trained SpaMIL checkpoint (.pth)")
+    p.add_argument("--checkpoint", required=True, help="Trained PathMIL checkpoint (.pth)")
     p.add_argument("--out", required=True, help="Output directory")
 
     p.add_argument("--target-mpp", type=float, default=None,

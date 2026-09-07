@@ -29,8 +29,8 @@
   <rect x="0" y="0" width="1500" height="760" fill="#ffffff"/>
 
   <!-- Title -->
-  <text x="750" y="40" text-anchor="middle" class="htitle">SpaMIL Pipeline — H&amp;E histology → per-spot gene expression / module scores</text>
-  <text x="750" y="64" text-anchor="middle" class="hsubm">spamil &lt;step&gt; --config &lt;cfg&gt; --target {genes,modules}</text>
+  <text x="750" y="40" text-anchor="middle" class="htitle">PathMIL Pipeline — H&amp;E histology → per-spot gene expression / module scores</text>
+  <text x="750" y="64" text-anchor="middle" class="hsubm">pathmil &lt;step&gt; --config &lt;cfg&gt; --target {genes,modules}</text>
 
   <!-- ==================== INPUT CHIPS ==================== -->
   <rect x="40" y="92" width="260" height="40" rx="8" fill="#eceff1" stroke="#78909c" stroke-width="1.3"/>

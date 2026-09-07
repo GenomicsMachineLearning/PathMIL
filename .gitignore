@@ -12,8 +12,8 @@ dist/
 venv/
 env/
 
-# SpaMIL outputs / working dirs
-spamil_work/
+# PathMIL outputs / working dirs
+pathmil_work/
 work/
 logs/
 *.jobid*

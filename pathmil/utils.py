@@ -8,7 +8,7 @@ import random
 import numpy as np
 
 
-def get_logger(name: str = "spamil") -> logging.Logger:
+def get_logger(name: str = "pathmil") -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
         handler = logging.StreamHandler()
@@ -37,7 +37,7 @@ def set_seed(seed: int) -> None:
 
 def hf_login_if_enabled(cfg: dict) -> None:
     """Best-effort huggingface login for gated foundation models."""
-    from spamil.config import cget
+    from pathmil.config import cget
     if not cget(cfg, "embed.hf_login", True):
         return
     try:

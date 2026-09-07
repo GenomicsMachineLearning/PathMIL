@@ -1,4 +1,4 @@
-"""Step 5 (`spamil plot`): per-gene 4-panel prediction maps on the H&E.
+"""Step 5 (`pathmil plot`): per-gene 4-panel prediction maps on the H&E.
 
 For each selected target, render one figure with four panels:
 
@@ -17,7 +17,7 @@ lazily so importing this module stays cheap.
 The 256 instances per patch are the Virchow2 token grid -- a 16x16 spatial grid inside
 each patch -- treated here as a grid of "superpixels". Panels 1-2 (ground truth /
 spot bag prediction) render onto the spot shapes `sdata["<lib>"]`. Panels 3-4 prefer
-the visualization track from `spamil predict`: `image_instance_predictions.npy` over
+the visualization track from `pathmil predict`: `image_instance_predictions.npy` over
 the `image_patches` sliding-window grid (whole-tissue coverage, as in
 notebooks/05_prediction_plot_test.ipynb). When that track is absent they fall back to
 the per-spot `instance_predictions.npy` over `spot_patches`.
@@ -34,8 +34,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from spamil.config import cget
-from spamil.utils import get_logger
+from pathmil.config import cget
+from pathmil.utils import get_logger
 
 log = get_logger()
 
@@ -54,7 +54,7 @@ def _load_prediction_dir(paths, lib, prediction_dir):
     if (d / "bag_predictions.npy").exists():
         return d
     raise FileNotFoundError(
-        f"No bag_predictions.npy for {lib}; run `spamil predict` or pass --prediction-dir")
+        f"No bag_predictions.npy for {lib}; run `pathmil predict` or pass --prediction-dir")
 
 
 def _target_names(pred_dir: Path, n: int) -> list:
@@ -358,7 +358,7 @@ def run_plot(cfg: dict, paths: dict, samples=None, targets=None, prediction_dir=
     if not samples:
         samples = sorted(p.name for p in Path(paths["predictions"]).glob("*") if p.is_dir())
     if not samples:
-        raise RuntimeError("No samples to plot; run `spamil predict` first or pass --samples")
+        raise RuntimeError("No samples to plot; run `pathmil predict` first or pass --samples")
 
     for lib in samples:
         try:

@@ -1,11 +1,11 @@
-"""`spamil` command-line interface.
+"""`pathmil` command-line interface.
 
 Steps:
-  spamil preprocess     Visium + H&E  -> patch embeddings (+ zarr archive)
-  spamil build-targets  embeddings + expression -> combined training H5
-  spamil train          train MIL regressor (full | loo)
-  spamil predict        apply a checkpoint to samples
-  spamil plot           spatial maps / PCC summaries
+  pathmil preprocess     Visium + H&E  -> patch embeddings (+ zarr archive)
+  pathmil build-targets  embeddings + expression -> combined training H5
+  pathmil train          train MIL regressor (full | loo)
+  pathmil predict        apply a checkpoint to samples
+  pathmil plot           spatial maps / PCC summaries
 
 Every step takes --config <yaml> and any number of --override key=value.
 """
@@ -15,9 +15,9 @@ from __future__ import annotations
 import argparse
 import sys
 
-from spamil import __version__
-from spamil.config import load_config, resolve_paths, cget, cset
-from spamil.utils import get_logger
+from pathmil import __version__
+from pathmil.config import load_config, resolve_paths, cget, cset
+from pathmil.utils import get_logger
 
 log = get_logger()
 
@@ -37,9 +37,9 @@ def _common(p):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="spamil", description=__doc__,
+    parser = argparse.ArgumentParser(prog="pathmil", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--version", action="version", version=f"spamil {__version__}")
+    parser.add_argument("--version", action="version", version=f"pathmil {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("preprocess", help="Generate patch embeddings from Visium + H&E")
@@ -84,27 +84,27 @@ def main(argv=None):
     samples = _split_samples(getattr(args, "samples", None))
 
     if args.command == "preprocess":
-        from spamil.embed import run_preprocess
+        from pathmil.embed import run_preprocess
         run_preprocess(cfg, paths, samples=samples, index=args.index, force=args.force)
 
     elif args.command == "build-targets":
-        from spamil.targets import run_build_targets
+        from pathmil.targets import run_build_targets
         run_build_targets(cfg, paths, samples=samples,
                           target=cget(cfg, "targets.type"), force=args.force)
 
     elif args.command == "train":
-        from spamil.train import run_train
+        from pathmil.train import run_train
         run_train(cfg, paths, mode=cget(cfg, "train.mode"),
                   target=cget(cfg, "targets.type"),
                   sample_index=args.sample_index, force=args.force)
 
     elif args.command == "predict":
-        from spamil.predict import run_predict
+        from pathmil.predict import run_predict
         run_predict(cfg, paths, samples=samples, checkpoint=args.checkpoint,
                     target=cget(cfg, "targets.type"), force=args.force)
 
     elif args.command == "plot":
-        from spamil.plot import run_plot
+        from pathmil.plot import run_plot
         run_plot(cfg, paths, samples=samples,
                  targets=_split_samples(args.targets),
                  prediction_dir=args.prediction_dir, n_top=args.n_top)

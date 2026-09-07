@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from spamil import targets as tgt
+from pathmil import targets as tgt
 
 
 def _adata(counts):
@@ -90,7 +90,7 @@ class TestTargetSum:
         Every current reader wraps it in float(), so a string works by accident.
         This pins it so the next reader does not have to know.
         """
-        from spamil.config import DEFAULT_CONFIG_PATH, cget, load_config
+        from pathmil.config import DEFAULT_CONFIG_PATH, cget, load_config
 
         # Resolved from the package, not the cwd, so the test does not depend on
         # where pytest was invoked from.

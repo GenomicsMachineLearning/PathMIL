@@ -1,4 +1,4 @@
-"""Step 1 (`spamil preprocess`): Visium + H&E -> Virchow2 patch embeddings.
+"""Step 1 (`pathmil preprocess`): Visium + H&E -> Virchow2 patch embeddings.
 
 Ported from scripts/prepare_training_dataset.py (`process_sample`, `add_spot_patches`,
 `stardist`, `zip_zarr_folder`). Produces, per sample, under work_dir/embeddings/:
@@ -26,10 +26,10 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from spamil.config import cget
-from spamil import io as sio
-from spamil.scale import resolve_patch_geometry
-from spamil.utils import get_logger, hf_login_if_enabled
+from pathmil.config import cget
+from pathmil import io as sio
+from pathmil.scale import resolve_patch_geometry
+from pathmil.utils import get_logger, hf_login_if_enabled
 
 log = get_logger()
 
@@ -118,7 +118,7 @@ def _add_spot_patches(sdata, library_id, size=224):
 def _save_qc_overlay(sdata, image_key, shapes_key, title, out_file) -> None:
     """Best-effort QC figure: outline `shapes_key` over the downsampled H&E and save it.
 
-    Reuses the spatialdata-plot `.pl` accessor pattern from spamil/plot.py. Never raises:
+    Reuses the spatialdata-plot `.pl` accessor pattern from pathmil/plot.py. Never raises:
     QC rendering must not abort preprocessing.
     """
     try:
@@ -340,7 +340,7 @@ def process_sample(library_id: str, cfg: dict, paths: dict, force: bool = False)
 
 
 def run_preprocess(cfg: dict, paths: dict, samples=None, index=None, force=False) -> None:
-    """Driver for `spamil preprocess`."""
+    """Driver for `pathmil preprocess`."""
     hf_login_if_enabled(cfg)
     all_samples = samples if samples else sio.discover_samples(cfg)
     if not all_samples:

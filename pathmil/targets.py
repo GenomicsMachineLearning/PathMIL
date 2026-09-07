@@ -1,4 +1,4 @@
-"""Step 2 (`spamil build-targets`): build combined embeddings+target H5 files.
+"""Step 2 (`pathmil build-targets`): build combined embeddings+target H5 files.
 
 Ported from notebooks 03_train_MIL / 03_02_train_MIL_ms. For each sample it reads
 the lightweight expression matrix (spot order == embedding order, both follow the
@@ -23,9 +23,9 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from spamil.config import cget, expand
-from spamil import io as sio
-from spamil.utils import get_logger
+from pathmil.config import cget, expand
+from pathmil import io as sio
+from pathmil.utils import get_logger
 
 log = get_logger()
 
@@ -108,7 +108,7 @@ SCALE_ATTRS = ("target_mpp", "slide_mpp", "fov_um", "patch_size", "read_px")
 def _load_embeddings(paths: dict, lib_id: str) -> np.ndarray:
     emb_file = Path(paths["embeddings"]) / f"{lib_id}_patch_embeddings.h5"
     if not emb_file.exists():
-        raise FileNotFoundError(f"Run `spamil preprocess` first; missing {emb_file}")
+        raise FileNotFoundError(f"Run `pathmil preprocess` first; missing {emb_file}")
     with h5py.File(emb_file, "r") as f:
         return f["embeddings"][:]
 
@@ -193,7 +193,7 @@ def process_sample_modules(cfg: dict, paths: dict, lib_id: str, info: dict,
 
 
 def run_build_targets(cfg: dict, paths: dict, samples=None, target=None, force=False) -> dict:
-    """Driver for `spamil build-targets`. Returns target-definition info."""
+    """Driver for `pathmil build-targets`. Returns target-definition info."""
     target = target or cget(cfg, "targets.type", "genes")
     if samples is None:
         # Only build targets for samples that already have embeddings.
@@ -202,7 +202,7 @@ def run_build_targets(cfg: dict, paths: dict, samples=None, target=None, force=F
                          for p in emb_dir.glob("*_patch_embeddings.h5")
                          if not p.name.endswith("_image_patch_embeddings.h5"))
     if not samples:
-        raise RuntimeError("No samples with embeddings found; run `spamil preprocess` first")
+        raise RuntimeError("No samples with embeddings found; run `pathmil preprocess` first")
 
     log.info("Building '%s' targets for %d sample(s)", target, len(samples))
     if target == "genes":

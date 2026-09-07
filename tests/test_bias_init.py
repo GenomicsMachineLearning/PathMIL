@@ -16,8 +16,8 @@ import h5py
 import numpy as np
 import pytest
 
-from spamil.data import MILRegressionDiskDataset
-from spamil.train import _resolve_bias_init
+from pathmil.data import MILRegressionDiskDataset
+from pathmil.train import _resolve_bias_init
 
 
 def _sample(tmp_path, lib_id, values):

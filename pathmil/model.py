@@ -231,7 +231,7 @@ class MILAttentionRegressor(nn.Module):
 def check_activation_matches_target(cfg: dict, target_type: str) -> None:
     """Reject a non-negative head on a target that is legitimately signed.
 
-    `spamil/targets.py` z-scores module scores across spots, so roughly half of
+    `pathmil/targets.py` z-scores module scores across spots, so roughly half of
     every modules-mode target is negative by construction. Constraining the head
     to be non-negative there would train it to emit ~0 for half the data. Genes
     mode is the only place the constraint is meaningful.

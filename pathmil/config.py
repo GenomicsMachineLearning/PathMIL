@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-# Packaged default config lives at <repo>/SpaMIL/configs/default.yaml
+# Packaged default config lives at <repo>/PathMIL/configs/default.yaml
 _PKG_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = _PKG_DIR.parent / "configs" / "default.yaml"
 

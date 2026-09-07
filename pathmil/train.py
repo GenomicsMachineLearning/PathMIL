@@ -1,4 +1,4 @@
-"""Step 3 (`spamil train`): train the attention-MIL regressor.
+"""Step 3 (`pathmil train`): train the attention-MIL regressor.
 
 Two modes (ported from train_mil_loo.py / train_mil_loo_test.py):
   - full : train on every processed sample, save a single checkpoint for prediction.
@@ -15,11 +15,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from spamil.config import cget
-from spamil.data import MILRegressionDiskDataset, load_sample_info_from_directory
-from spamil.metrics import calculate_metrics
-from spamil.model import build_model, check_activation_matches_target, save_checkpoint
-from spamil.utils import get_logger, get_device, set_seed
+from pathmil.config import cget
+from pathmil.data import MILRegressionDiskDataset, load_sample_info_from_directory
+from pathmil.metrics import calculate_metrics
+from pathmil.model import build_model, check_activation_matches_target, save_checkpoint
+from pathmil.utils import get_logger, get_device, set_seed
 
 log = get_logger()
 
@@ -171,7 +171,7 @@ def run_train(cfg: dict, paths: dict, mode=None, target=None, sample_index=None,
     processed_dir = Path(paths["processed"])
     sample_info = load_sample_info_from_directory(processed_dir)
     if not sample_info:
-        raise RuntimeError(f"No processed H5 files in {processed_dir}; run `spamil build-targets`")
+        raise RuntimeError(f"No processed H5 files in {processed_dir}; run `pathmil build-targets`")
     dataset = MILRegressionDiskDataset(sample_info)
     n_outputs = _peek_n_outputs(sample_info[0]["file_path"])
     target_type, target_names = load_target_names(cfg, paths, target, n_outputs)

@@ -1,4 +1,4 @@
-"""Step 4 (`spamil predict`): run a trained checkpoint on new samples.
+"""Step 4 (`pathmil predict`): run a trained checkpoint on new samples.
 
 Loads a checkpoint (which carries its architecture + target names) and runs the MIL
 model over each sample on two tracks:
@@ -7,7 +7,7 @@ model over each sample on two tracks:
                                                        predictions for PCC evaluation.
   - image grid (`<lib>_image_patch_embeddings.h5`)  -> a no-gap sliding-window grid
                                                        over the whole tissue, used by
-                                                       `spamil plot` for the fine
+                                                       `pathmil plot` for the fine
                                                        superpixel / single-cell maps.
 
 PCC is computed on the spot track whenever the build-targets combined H5
@@ -22,12 +22,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from spamil.config import cget
-from spamil.data import MILTestDataset, embedding_sample_info
-from spamil.metrics import calculate_metrics
-from spamil.model import load_checkpoint
-from spamil.train import evaluate
-from spamil.utils import get_logger, get_device
+from pathmil.config import cget
+from pathmil.data import MILTestDataset, embedding_sample_info
+from pathmil.metrics import calculate_metrics
+from pathmil.model import load_checkpoint
+from pathmil.train import evaluate
+from pathmil.utils import get_logger, get_device
 
 log = get_logger()
 
@@ -41,7 +41,7 @@ def _resolve_checkpoint(cfg, paths, checkpoint, target):
     if not default.exists():
         raise FileNotFoundError(
             f"No --checkpoint given and default not found: {default}. "
-            f"Train a model first (`spamil train --mode full`).")
+            f"Train a model first (`pathmil train --mode full`).")
     return default
 
 
@@ -96,7 +96,7 @@ def run_predict(cfg: dict, paths: dict, samples=None, checkpoint=None, target=No
                          for p in emb_dir.glob("*_patch_embeddings.h5")
                          if not p.name.endswith("_image_patch_embeddings.h5"))
     if not samples:
-        raise RuntimeError("No samples with embeddings found; run `spamil preprocess` first")
+        raise RuntimeError("No samples with embeddings found; run `pathmil preprocess` first")
 
     bs = int(cget(cfg, "train.batch_size", 16))
     nw = int(cget(cfg, "train.num_workers", 4))
@@ -127,7 +127,7 @@ def run_predict(cfg: dict, paths: dict, samples=None, checkpoint=None, target=No
                            device, bs, nw)
         if image is None:
             log.info("[%s] no image-patch embeddings; visualization track skipped "
-                     "(re-run `spamil preprocess` to generate them)", lib)
+                     "(re-run `pathmil preprocess` to generate them)", lib)
             continue
         img_bag, img_inst, img_attn = image
         np.save(out_dir / "image_bag_predictions.npy", img_bag)

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 import torch
 
-from spamil.model import (
+from pathmil.model import (
     _activation_module,
     MILAttentionRegressor,
     build_model,

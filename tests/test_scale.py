@@ -2,7 +2,7 @@
 
 Slide MPP is `100 um / spot pitch in pixels`, deliberately *not*
 `55 / spot_diameter_fullres`. These tests pin that against hand-constructed grids
-of known geometry, built independently of anything in `spamil.scale`.
+of known geometry, built independently of anything in `pathmil.scale`.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from spamil.scale import (
+from pathmil.scale import (
     native_read_size,
     resolve_patch_geometry,
     slide_mpp_from_positions,
@@ -24,7 +24,7 @@ def hex_grid(pitch_px, n_rows=8, n_cols=12, rotation_deg=0.0, origin=(0.0, 0.0))
     """A Visium-like hex grid: in-row neighbours differ by array_col 2, `pitch_px` apart.
 
     Built from the slide's geometry (row spacing = pitch * sin(60 deg)), not from
-    anything in spamil.scale.
+    anything in pathmil.scale.
     """
     theta = math.radians(rotation_deg)
     rows = []

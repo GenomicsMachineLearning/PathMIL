@@ -26,7 +26,7 @@
   <rect x="0" y="0" width="1060" height="900" fill="#ffffff"/>
 
   <!-- Title -->
-  <text x="530" y="40" text-anchor="middle" class="htitle">SpaMIL — Attention-MIL Regressor</text>
+  <text x="530" y="40" text-anchor="middle" class="htitle">PathMIL — Attention-MIL Regressor</text>
   <text x="530" y="63" text-anchor="middle" class="hsub">MILAttentionRegressor · one Visium spot = a bag of patch-token instances</text>
 
   <!-- INPUT -->

@@ -1,4 +1,4 @@
-# SpaMIL
+# PathMIL
 
 Attention-based **Multiple Instance Learning** for predicting per-spot **gene
 expression** and **gene-module scores** from Visium **H&E histology**.
@@ -39,11 +39,11 @@ preprocess  →  build-targets  →  train  →  predict  →  plot
 
 | step | command | output |
 |------|---------|--------|
-| 1 | `spamil preprocess` | `work/<name>/embeddings/<lib>_patch_embeddings.h5` + `<lib>_image_patch_embeddings.h5` (+ `<lib>.zarr.zip`) |
-| 2 | `spamil build-targets` | `work/<name>/mil_processed_samples/<lib>.h5` (embeddings + target) |
-| 3 | `spamil train` | `work/<name>/models/{full,loo}_<target>/.../model_checkpoint.pth` |
-| 4 | `spamil predict` | `work/<name>/predictions/<lib>/{bag_predictions.npy + target_level_pcc.csv, image_bag_predictions.npy}` |
-| 5 | `spamil plot` | `work/<name>/plots/<lib>/<lib>_<target>_4panel.png` |
+| 1 | `pathmil preprocess` | `work/<name>/embeddings/<lib>_patch_embeddings.h5` + `<lib>_image_patch_embeddings.h5` (+ `<lib>.zarr.zip`) |
+| 2 | `pathmil build-targets` | `work/<name>/mil_processed_samples/<lib>.h5` (embeddings + target) |
+| 3 | `pathmil train` | `work/<name>/models/{full,loo}_<target>/.../model_checkpoint.pth` |
+| 4 | `pathmil predict` | `work/<name>/predictions/<lib>/{bag_predictions.npy + target_level_pcc.csv, image_bag_predictions.npy}` |
+| 5 | `pathmil plot` | `work/<name>/plots/<lib>/<lib>_<target>_4panel.png` |
 
 `predict` runs two tracks: **spot bags** (`bag_predictions.npy`, evaluated with PCC
 against the build-targets ground truth when present → `target_level_pcc.csv` /
@@ -165,10 +165,10 @@ such as `.svs`.
 ## Install
 
 ```bash
-mamba create -n SpaMIL python=3.11 uv
-mamba activate SpaMIL
-git clone https://github.com/GenomicsMachineLearning/SpaMIL.git
-cd SpaMIL
+mamba create -n PathMIL python=3.11 uv
+mamba activate PathMIL
+git clone https://github.com/GenomicsMachineLearning/PathMIL.git
+cd PathMIL
 uv pip install -e .[embed]
 ```
 
@@ -177,7 +177,7 @@ needed for the `preprocess` step. If you already have embeddings and only want t
 `train` / `predict` / `plot`, a plain `pip install -e .` (torch + numpy + scanpy +
 h5py) is enough.
 
-> **Note:** SpaMIL is currently designed to be run from a checked-out source tree
+> **Note:** PathMIL is currently designed to be run from a checked-out source tree
 > (editable install, `pip install -e .`), so that `configs/default.yaml` resolves
 > relative to the package.
 
@@ -211,7 +211,7 @@ merged on top, and any key can be overridden on the CLI. Start from the bundled
 (gene-module targets) and edit the paths for your data:
 
 ```bash
-spamil preprocess --config configs/example.yaml --override embed.batch_size=8
+pathmil preprocess --config configs/example.yaml --override embed.batch_size=8
 ```
 
 ### The model settings, and why they are not free parameters
@@ -222,7 +222,7 @@ knob, but each also has one setting the rest of the pipeline assumes.
 | key | default | why |
 |---|---|---|
 | `targets.target_sum` | `1.0e+4` | The `T` in `log1p(c / L · T)`. **Baked into the H5 at build-targets time** — changing it means re-running `build-targets --force`. With no value, scanpy normalises each sample to *its own median library size*, so every sample lands on a different target scale and one head has to fit every sample's sequencing depth. Note the `+`: YAML 1.1 parses `1.0e4` as a *string*. |
-| `model.output_activation` | `softplus` | Constrains the instance head to be non-negative. **Must be `linear` for `targets.type: modules`** — module scores are z-scored across spots and are legitimately signed, so a non-negative head would learn to emit ~0 for half the data. `spamil train` refuses the combination outright; `configs/example_modules.yaml` already sets it. |
+| `model.output_activation` | `softplus` | Constrains the instance head to be non-negative. **Must be `linear` for `targets.type: modules`** — module scores are z-scored across spots and are legitimately signed, so a non-negative head would learn to emit ~0 for half the data. `pathmil train` refuses the combination outright; `configs/example_modules.yaml` already sets it. |
 | `model.attention_mode` | `per_gene` | One softmax over instances per target. See the memory cost below. |
 | `model.bias_init_from_data` | `true` | `softplus(0) = 0.693` against a typical target mean of ~0.016 is a ~43× overshoot on every output column, so the head starts at the training-set target mean instead (stored pre-activation). Under `--mode loo` the mean comes from the **training** samples only, never the held-out one. |
 | `embed.target_mpp` | `0.2535` | The physical scale of a patch — see below. |
@@ -246,10 +246,10 @@ the same physical field of view per instance — at the default
 `224 × 0.2535 = 56.8 µm`, about one Visium spot. Set `embed.target_mpp: null` for
 the old behaviour (read `patch_size` native px, no rescaling).
 
-**Where `slide_mpp` comes from matters.** SpaMIL measures it from the Visium spot
+**Where `slide_mpp` comes from matters.** PathMIL measures it from the Visium spot
 pitch: spots adjacent in an array row are 100 µm apart by hardware, expressed in
 the same coordinate space the patches are cut in, and robust to registration
-(`spamil/scale.py`). It deliberately does **not** use either of the two obvious
+(`pathmil/scale.py`). It deliberately does **not** use either of the two obvious
 alternatives:
 
 - `55 / spot_diameter_fullres` — `spot_diameter_fullres` does not measure the
@@ -278,13 +278,13 @@ remember it (`--target-mpp 0` forces native resolution).
 | checkpoint size, G = 4,876 | ~28 MB | ~43 MB |
 
 The attention array therefore becomes **the same size as the instance
-predictions**, so `spamil predict` and `spamil train --mode loo` roughly double
+predictions**, so `pathmil predict` and `pathmil train --mode loo` roughly double
 both peak RAM and output bytes. `train.evaluate` concatenates per-batch arrays in
 memory before writing, so the peak is the whole array: at 2,000 spots × 4,876
 targets that is ~10 GB for the attention alone, and the whole-tissue image track
-in `spamil predict` is larger still.
+in `pathmil predict` is larger still.
 
-Nothing guards this on the `spamil predict` track — the array is written whatever
+Nothing guards this on the `pathmil predict` track — the array is written whatever
 its size. If it is too large:
 
 - set `model.attention_mode: shared` for a `(n_spots, 256)` attention map;
@@ -303,11 +303,11 @@ safe.
 End to end on your own Visium cohort (point `configs/example.yaml` at your data first):
 
 ```bash
-spamil preprocess    --config configs/example.yaml                       # GPU; patch embeddings
-spamil build-targets --config configs/example.yaml --target genes        # CPU; combined H5
-spamil train         --config configs/example.yaml --target genes --mode full   # GPU; full training
-spamil predict       --config configs/example.yaml --target genes        # GPU; predictions + PCC
-spamil plot          --config configs/example.yaml                       # CPU; figures
+pathmil preprocess    --config configs/example.yaml                       # GPU; patch embeddings
+pathmil build-targets --config configs/example.yaml --target genes        # CPU; combined H5
+pathmil train         --config configs/example.yaml --target genes --mode full   # GPU; full training
+pathmil predict       --config configs/example.yaml --target genes        # GPU; predictions + PCC
+pathmil plot          --config configs/example.yaml                       # CPU; figures
 ```
 
 ### Gene vs module targets
@@ -317,20 +317,20 @@ modules, point `targets.modules_csv` at a CSV with columns `id` (gene symbol) an
 `module` (see `assets/modules/example_gene_modules.csv`), then:
 
 ```bash
-spamil build-targets --config configs/example_modules.yaml --target modules
-spamil train         --config configs/example_modules.yaml --target modules --mode full
+pathmil build-targets --config configs/example_modules.yaml --target modules
+pathmil train         --config configs/example_modules.yaml --target modules --mode full
 ```
 
 Module scores are z-scored across spots, so roughly half of every target is
 negative by construction and the non-negative head the gene default ships would
 be wrong. `configs/example_modules.yaml` therefore pins
 `model.output_activation: linear`; keep that in any modules config of your own, or
-`spamil train` will refuse to start.
+`pathmil train` will refuse to start.
 
 ### Leave-one-out cross-validation
 
 ```bash
-spamil train --config configs/example.yaml --target genes --mode loo --sample-index 0
+pathmil train --config configs/example.yaml --target genes --mode loo --sample-index 0
 ```
 
 Each run holds out one sample, trains on the rest, and writes PCC/MSE/R² plus
@@ -342,9 +342,9 @@ over `0 .. N-1` to cover every sample.
 Prediction only needs the new samples' embeddings + a checkpoint:
 
 ```bash
-spamil preprocess --config <new_cfg>
-spamil predict   --config <new_cfg> --checkpoint /path/to/model_checkpoint.pth
-spamil plot      --config <new_cfg>
+pathmil preprocess --config <new_cfg>
+pathmil predict   --config <new_cfg> --checkpoint /path/to/model_checkpoint.pth
+pathmil plot      --config <new_cfg>
 ```
 
 The checkpoint carries its architecture, target-name list and training
@@ -373,7 +373,7 @@ checkpoint, and one affects existing *data*.
   build time. Training on H5s built by an earlier version still runs, but the
   checkpoint's provenance block will record a `target_sum` the data was not built
   with, and mixing old and new H5s in one `work_dir` trains a single head across
-  two target scales without any error. Re-run `spamil build-targets --force`
+  two target scales without any error. Re-run `pathmil build-targets --force`
   before training.
 
 ## Tests
